@@ -1,6 +1,31 @@
 # nbep-7
 Numba Enhancement Proposal (NBEP) 7: External Memory Management Plugins
 
+# Document status
+
+This is a *pre-draft* - many sections are incomplete / work-in-progress and all
+subject to change significantly in the near future. A large proportion of this
+document simply consists of notes that may need significant revision or moving
+out entirely.
+
+
+# Background
+
+- CUDA Array interface allows sharing of data between different GPU-accelerated
+  Python libraries.
+- However, each manages its own memory:
+  - Numba has internal memory management for creation of device arrays
+  - RAPIDS (cuDF, etc.) use the Rapids Memory Manager (RMM).
+  - CuPy includes a memory pool implementation for both device and pinned
+    memory.
+
+The goal of this NBEP is to enable Numba's internal memory management to be
+replaced by the user with a plugin interface, so that Numba requests allocations
+and frees from an external memory manager. I.e. Numba no longer directly
+allocates and frees device memory when creating device arrays, but instead
+requests allocations from the external manager.
+
+
 # Interface
 
 Based on outlining functions from driver module:
@@ -23,9 +48,42 @@ class BaseCUDAMemoryManager(object):
 Maybe want to have the option for the Numba memory management for host
 allocations? (e.g. if RMM or other library does not support it?
 
+
 # Prototyping / experimental implementation
 
-See https://github.com/gmarkall/numba/tree/grm-issue-3247.
+See:
+
+- Numba branch: https://github.com/gmarkall/numba/tree/grm-numba-nbep-7.
+- RMM branch: https://github.com/gmarkall/rmm/tree/grm-numba-nbep-7.
+- CuPy branch: To be addressed in future.
+  - See [CuPy memory management docs](https://docs-cupy.chainer.org/en/stable/reference/memory.html).
+
+
+## Current implementation status
+
+A simple allocation and free using RMM appears to work. For the example code:
+
+```python
+import rmm
+import numpy as np
+
+from numba import cuda
+
+rmm.use_rmm_for_numba()
+
+a = np.zeros(10)
+d_a = cuda.to_device(a)
+del(d_a)
+print(rmm.csv_log())
+```
+
+We see:
+
+```
+Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,Total Memory,Current Allocs,Start,End,Elapsed,Location
+Alloc,0,0x7fae06600000,0,80,0,0,1,1.10549,1.1074,0.00191666,/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py:683
+Free,0,0x7fae06600000,0,0,0,0,0,1.10798,1.10921,0.00122238,/home/nfs/gmarkall/numbadev/numba/numba/utils.py:678
+```
 
 
 # To think about / expand on
