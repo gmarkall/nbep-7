@@ -140,8 +140,9 @@ gpu_data = _memory.MemoryPointer(context=devices.get_context(),
 ## Allocations / deallocations in driver
 
 Whilst the exposure of these is useful for testing, it's not clear that these
-should be anything other than an implementation detail. At present with memory
-manager, they're exposed as:
+should be anything other than an implementation detail (perhaps this can be
+kept internal to Numba and not visible to the memory manager plugin interface).
+At present with memory manager, they're exposed as:
 
 ```python
     @property
