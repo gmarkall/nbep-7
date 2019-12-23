@@ -85,6 +85,27 @@ Alloc,0,0x7fae06600000,0,80,0,0,1,1.10549,1.1074,0.00191666,/home/nfs/gmarkall/n
 Free,0,0x7fae06600000,0,0,0,0,0,1.10798,1.10921,0.00122238,/home/nfs/gmarkall/numbadev/numba/numba/utils.py:678
 ```
 
+### Numba CUDA Unit tests
+
+A summary of the unit test results at present running with:
+
+```
+NUMBA_CUDA_MEMORY_MANAGER=RMM python -m numba.runtests numba.cuda.tests
+```
+
+is:
+
+```
+Ran 517 tests in 173.017s
+
+FAILED (failures=11, errors=83, skipped=11)
+```
+
+Many errors are due to unprintable characters in the CSV (at present the log is
+printed out for every allocation and free, to make it easy to see what's going
+on), a lack of support for host/pinned memory allocation, and a small number of
+actual errors.
+
 
 # To think about / expand on
 
