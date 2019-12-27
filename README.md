@@ -129,13 +129,71 @@ is:
 ```
 Ran 517 tests in 173.017s
 
-FAILED (failures=11, errors=83, skipped=11)
+FAILED (failures=7, errors=1, skipped=11)
 ```
 
-Many errors are due to unprintable characters in the CSV (at present the log is
-printed out for every allocation and free, to make it easy to see what's going
-on), a lack of support for host/pinned memory allocation, and a small number of
-actual errors.
+Most failures are due to mismatches between test expectations for the state of
+the deallocations list and its actual state - probably the expectation of the
+tests needs updating for external memory management, since plugins needn't be
+bound to manage memory using the same strategy as Numba internally.
+
+One fail is:
+
+
+```
+======================================================================
+FAIL: test_staged (numba.cuda.tests.cudapy.test_ipc.TestIpcStaged)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/tests/cudapy/test_ipc.py", line 273, in test_staged
+    self.fail(out)
+AssertionError: Traceback (most recent call last):
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/tests/cudapy/test_ipc.py", line 22, in core_ipc_handle_test
+    arr = the_work()
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/tests/cudapy/test_ipc.py", line 207, in the_work
+    hostarray, deviceptr,  size=handle.size,
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py", line 1554, in device_to_host
+    fn(host_pointer(dst), device_pointer(src), size, *varargs)
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py", line 1482, in device_pointer
+    return device_ctypes_pointer(obj).value
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py", line 1489, in device_ctypes_pointer
+    require_device_memory(obj)
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py", line 1507, in require_device_memory
+    if not is_device_memory(obj):
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py", line 1501, in is_device_memory
+    return getattr(obj, '__cuda_memory__', False)
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/memory.py", line 359, in __getattr__
+    return getattr(self._view, fname)
+ReferenceError: weakly-referenced object no longer exists
+```
+
+Interactions with IPC have not yet been considered, so this issue needs some
+investigations.
+
+The error is:
+
+```
+======================================================================
+ERROR: test_consuming_strides (numba.cuda.tests.cudapy.test_cuda_array_interface.TestCudaArrayInterface)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/tests/cudapy/test_cuda_array_interface.py", line 252, in test_consuming_strides
+    got = cuda.from_cuda_array_interface(face).copy_to_host()
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/devices.py", line 225, in _require_cuda_context
+    return fn(*args, **kws)
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/api.py", line 49, in from_cuda_array_interface
+    devptr = driver.get_devptr_for_active_ctx(desc['data'][0])
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py", line 1390, in get_devptr_for_active_ctx
+    driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py", line 302, in safe_cuda_api_call
+    self._check_error(fname, retcode)
+  File "/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py", line 337, in _check_error
+    raise CudaAPIError(retcode, msg)
+numba.cuda.cudadrv.error.CudaAPIError: [1] Call to cuPointerGetAttribute results in CUDA_ERROR_INVALID_VALUE
+```
+
+which will be resolved by [Numba PR
+#5007](https://github.com/numba/numba/pull/5007).
 
 
 # To think about / expand on
