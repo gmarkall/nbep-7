@@ -196,6 +196,16 @@ def _module_finalizer(context, handle):
 Here the deallocations list is used for unloading the module rather than
 deallocating memory. Probably wants separating out!
 
+### Ownership
+
+Who should keep a list of pending deallocations?
+- Numba has them for GPU arrays because it might eventually want to free them
+- It also has them for streams, modules, and host allocations (and maybe other
+  things not mentioned here), which it may need to keep (the memory manager
+  plugin may not manage them).
+- The deallocation policy of the external plugin may not match what Numba would
+  do, so it will want some control over it.
+
 
 ## Relying on driver for memory info
 
