@@ -26,6 +26,37 @@ allocates and frees device memory when creating device arrays, but instead
 requests allocations from the external manager.
 
 
+# Current model / implementation
+
+- Numba Driver keeps list of allocations and deallocations
+- Finalizers for Numba-allocated objects add the object to the list of
+  deallocation.
+- Allocation and deallocations lists shared between several primitives:
+  - Device memory
+  - Pinned memory
+  - Mapped memory
+  - Streams
+  - Modules
+  - ... ?
+- Numba uses total memory size to determine how many pending deallocations it
+  will keep around - a fraction of total GPU memory determined by
+  `CUDA_DEALLOC_RATIO`.
+
+
+# Potential requirements
+
+- Allow Numba to continue managing host memory (mapped / pinned)
+- Allow Numba to carry on managing streams / modules etc.
+- Enable a different deallocation strategy to be used by plugins
+  - Will need some test modifications - quite a few check the allocations /
+    deallocations list, which will become tests of Numba's "bundled" memory
+    manager.
+- Ensure that Numba goes through the plugin for ALL allocations, and never
+  directly to the driver.
+- May need to fix some ambiguity around lifetimes for `__cuda_array_interface__`
+  - see e.g.[ Numba Issue #4886](https://github.com/numba/numba/issues/4886).
+
+
 # Interface
 
 Based on outlining functions from driver module:
