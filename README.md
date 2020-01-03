@@ -203,6 +203,8 @@ which will be resolved by [Numba PR
    - Should each context have its own memory manager?
      - Does RMM have one manager per context?
 2. How about resetting the context?
+   - Need to notify the memory manager plugin that the context was reset so it
+     can invalidate its own handles, maybe?
 3. What about streams?
    - RMM accepts stream parameter
      - (How) does this map to `cudaMalloc`?
@@ -295,6 +297,24 @@ Who should keep a list of pending deallocations?
 - The deallocation policy of the external plugin may not match what Numba would
   do, so it will want some control over it.
 
+Staged IPC should not own the memory it allocates:
+
+```
+diff --git a/numba/cuda/cudadrv/driver.py b/numba/cuda/cudadrv/driver.py
+index 7832955..f2c1352 100644
+--- a/numba/cuda/cudadrv/driver.py
++++ b/numba/cuda/cudadrv/driver.py
+@@ -922,7 +922,11 @@ class _StagedIpcImpl(object):
+         with cuda.gpus[srcdev.id]:
+             impl.close()
+
+-        return newmem.own()
++        # This used to be newmem.own() but the own() was removed - when the
++        # Numba CUDA memory manager is used, the pointer is already owned -
++        # when another memory manager is used, it is incorrect to take
++        # ownership of the pointer.
++        return newmem
+```
 
 ## Relying on driver for memory info
 
