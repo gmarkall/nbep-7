@@ -109,8 +109,12 @@ this module to external memory management are:
 
 - `BaseCUDAMemoryManager` and `HostOnlyCUDAMemoryManager`: base classes for
   external memory management plugins.
-- `MemoryPointer`: used to encapsulate information about a pointer to device- or
-  host-memory.
+- `MemoryPointer`: used to encapsulate information about a pointer to device
+  memory.
+- `MappedMemory`: used to hold information about host memory that is mapped into
+  the device address space (a subclass of `MemoryPointer`).
+- `PinnedMemory`: used to hold information about host memory that is pinned (a
+  subclass of `mviewbuf.MemAlloc`, a class internal to Numba).
 - `set_memory_manager`: a method for registering an external memory manager with
   Numba.
 
@@ -131,7 +135,7 @@ class BaseCUDAMemoryManager(object):
         - `nbytes`: Size of allocation in bytes
         - `stream`: Stream to use for the allocation (if relevant)
         
-        Returns: a MemoryPointer to the allocated memory.
+        Returns: a `MemoryPointer` to the allocated memory.
         """
         raise NotImplementedError
 
@@ -145,6 +149,10 @@ class BaseCUDAMemoryManager(object):
         - `portable`: Whether the memory will be considered pinned by all
                       contexts, and not just the calling context.
         - `wc`: Whether to allocate the memory as write-combined.
+
+        Returns a `MappedMemory` or `PinnedMemory` instance that owns the
+        allocated memory, depending on whether the region was mapped into
+        device memory.
         """
         raise NotImplementedError
 
@@ -156,6 +164,10 @@ class BaseCUDAMemoryManager(object):
         - `pointer`: The pointer to the beginning of the region to pin.
         - `size`: The size of the region to pin.
         - `mapped`: Whether the region should also be mapped into device memory.
+        
+        Returns a `MappedMemory` or `PinnedMemory` instance that refers to the
+        allocated memory, depending on whether the region was mapped into device
+        memory.
         """
         raise NotImplementedError
 
@@ -177,6 +189,8 @@ should not invalidate or reset the state of the EMM.
 
 
 ### Representing pointers
+
+#### Device Memory
 
 The `MemoryPointer` class is used to represent a pointer to memory. Whilst there
 are various details to the implementation the only aspect necessary to consider
@@ -200,6 +214,50 @@ class MemoryPointer:
 - `owner`: The owner is sometimes set by the internals of the class, or used for
   Numba's internal memory management, but need not be provided by the writer of
   an EMM plugin - the default of `None` should always suffice.
+
+
+#### Host Memory
+
+Memory mapped into the CUDA address space, which is created when `mapped=True` for the
+`memhostalloc` or `mempin` methods, is managed using the `MappedMemory` class:
+
+```python
+class MappedMemory(AutoFreePointer):
+    def __init__(self, context, owner, pointer, size, finalizer=None):
+```
+
+- `context`: The context in which the pointer was allocated.
+- `owner`: A Python object that owns the memory, e.g. a `DeviceNDArray`
+  instance.
+- `pointer`: A `ctypes` pointer type (e.g. `ctypes.c_void_p`) holding the
+  address of the allocated memory.
+- `size`: The size of the allocated memory in bytes.
+- `finalizer`: A method that is called when the last reference to the
+  `MappedMemory` object is released. This method could e.g. call `cuMemFreeHost`
+  on the pointer to deallocate the memory when it is no longer needed.
+
+Note that the inheritance from `AutoFreePointer` is an implementation detail and
+need not concern the developer of an EMM plugin - `MemoryPointer` is higher in
+the MRO of `MappedMemory`.
+
+Memory in the host address space only, that is pinned, is represented with the
+`PinnedMemory` class
+
+```python
+class PinnedMemory(mviewbuf.MemAlloc):
+    def __init__(self, context, owner, pointer, size, finalizer=None):
+```
+
+- `context`: The context in which the pointer was allocated.
+- `owner`: A Python object that owns the memory, e.g. a `DeviceNDArray`
+  instance.
+- `pointer`: A `ctypes` pointer type (e.g. `ctypes.c_void_p`) holding the
+  address of the pinned memory.
+- `size`: The size of the pinned region in bytes.
+- `finalizer`: A method that is called when the last reference to the
+  `PinnedMemory` object is released. This method could e.g. call
+  `cuMemHostUnregister` on the pointer to unpin the memory when the pinning is
+  no longer required.
 
 
 ### Providing device memory management only
