@@ -47,6 +47,13 @@ If an EMM is to be used, it will entirely replace Numba's internal memory
 management for the entire execution - an interface for setting the memory
 manager will be provided.
 
+## Device v.s. Host memory
+
+An EMM will always take responsibility for the management of device memory.
+However, not all CUDA memory management libraries also support managing host
+memory, so an option should be provided for Numba to continue the management of
+host memory, whilst ceding control of device memory to the EMM.
+
 ## Deallocation strategies
 
 Numba's internal memory management uses a [deallocation
@@ -63,6 +70,13 @@ context manager.
   and Numba's internal deallocation mechanism is not used. For example:
   - A similar strategy could be implemented by the EMM, or
   - Deallocated memory might immediately be returned to a memory pool.
+- The `defer_cleanup` context manager may behave differently with an EMM - an
+  EMM should be accompanied by documentation of the behaviour of the
+  `defer_cleanup` context manager when it is in use.
+  - For example, a pool allocator may always immediately return memory to a
+    pool immediately even when the context manager is in use, but may choose not
+    to free empty pools until `defer_cleanup` is not in use.
+
 
 ## Management of other objects
 
@@ -70,8 +84,6 @@ In addition to memory, Numba manages the allocation and deallocation of
 [streams](http://numba.pydata.org/numba-doc/latest/cuda-reference/host.html?highlight=stream#numba.cuda.stream)
 and modules (a module is a compiled object). The management of streams and
 modules should be unchanged by the presence or absence of an EMM.
-
-Both host / device memory.....
 
 ## Non-requirements
 
