@@ -27,25 +27,67 @@ others. For example:
   for both device and pinned memory.
 
 The goal of this NBEP is to enable Numba's internal memory management to be
-replaced by the user with a plugin interface, so that Numba requests allocations
-and frees from an external memory manager. I.e. Numba no longer directly
-allocates and frees device memory when creating device arrays, but instead
-requests allocations from the external manager.
+replaced by the user with a plugin interface, so that Numba requests all
+allocations from an external memory manager. When the plugin interface is in
+use, Numba no longer directly allocates or frees memory when creating arrays,
+but instead requests allocations and frees through the external manager.
 
 
 # Requirements
 
-- Allow Numba to continue managing host memory (mapped / pinned)
-- Allow Numba to carry on managing streams / modules etc.
-- Enable a different deallocation strategy to be used by plugins
-  - Will need some test modifications - quite a few check the allocations /
-    deallocations list, which will become tests of Numba's "bundled" memory
-    manager.
-- Ensure that Numba goes through the plugin for ALL allocations, and never
-  directly to the driver.
-- May need to fix some ambiguity around lifetimes for `__cuda_array_interface__`
-  - see e.g.[ Numba Issue #4886](https://github.com/numba/numba/issues/4886).
+Provide an *External Memory Manager (EMM)* interface in Numba.
 
+- When the EMM is in use, Numba will make all memory allocation using the EMM.
+  It will never directly call functions such as `CuMemAlloc`, `cuMemFree`, etc.
+- When not using an *External Memory Manager (EMM)*, Numba's present behaviour
+  is unchanged (at the time of writing, the current version is the 0.47
+  release).
+
+If an EMM is to be used, it will entirely replace Numba's internal memory
+management for the entire execution - an interface for setting the memory
+manager will be provided.
+
+## Deallocation strategies
+
+Numba's internal memory management uses a [deallocation
+strategy](https://numba.pydata.org/numba-doc/latest/cuda/memory.html#deallocation-behavior) designed to
+increase efficiency by deferring deallocations until a significant quantity are
+pending. It also provides a mechanism for preventing deallocations entirely for
+a critical section, using the
+[`defer_cleanup`](https://numba.pydata.org/numba-doc/latest/cuda/memory.html#numba.cuda.defer_cleanup)
+context manager.
+
+- When the EMM is not in use, the deallocation strategy and operation of
+  `defer_cleanup` remain the same.
+- When the EMM is in use, the deallocation strategy is implemented by the EMM,
+  and Numba's internal deallocation mechanism is not used. For example:
+  - A similar strategy could be implemented by the EMM, or
+  - Deallocated memory might immediately be returned to a memory pool.
+
+## Management of other objects
+
+In addition to memory, Numba manages the allocation and deallocation of
+[streams](http://numba.pydata.org/numba-doc/latest/cuda-reference/host.html?highlight=stream#numba.cuda.stream)
+and modules (a module is a compiled object). The management of streams and
+modules should be unchanged by the presence or absence of an EMM.
+
+Both host / device memory.....
+
+## Non-requirements
+
+In order to minimise complexity for an initial implementation, the following
+will not be supported:
+
+- Using different memory managers for different contexts. All contexts will use
+  the same memory manager.
+- Changing the memory manager once execution has begun. It is not practical to
+  change the memory manager and retain all allocations. Cleaning up the entire
+  state and then changing to a different memory allocator (rather than starting
+  a new process) appears to be a rather niche use case.
+- Any changes to the `__cuda_array_interface__` to further define its semantics,
+  e.g. for acquiring / releasing memory as discussed in [Numba Issue
+  #4886](https://github.com/numba/numba/issues/4886) - these are independent,
+  and can be addressed as part of separate proposals.
 
 
 # Current model / implementation
@@ -389,3 +431,10 @@ Will need some test refactoring, e.g.
          owned = ptr.own()
          del owned
 ```
+
+- Enabling a different deallocation strategy to be used by plugins:
+  - Will need some test modifications - quite a few check the allocations /
+    deallocations list, which will become tests of Numba's "bundled" memory
+    manager.
+
+
