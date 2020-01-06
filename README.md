@@ -178,6 +178,23 @@ class BaseCUDAMemoryManager(object):
         """
         raise NotImplementedError
 
+    def get_memory_info(self):
+        """
+        Returns (free, total) memory in bytes in the context
+        """
+        raise NotImplementedError
+
+    def get_ipc_handle(self, memory):
+        """
+        Return an `IpcHandle` from a GPU allocation
+        """
+        raise NotImplementedError
+
+    def reset(self):
+        """
+        Clear up all resources in this context.
+        """
+
     # FIXME: Add hook for defer_cleanup here.
 ```
 
@@ -354,21 +371,99 @@ the example in this proposal.
 
 ### Current model / implementation
 
-- Numba Driver keeps list of allocations and deallocations
-- Finalizers for Numba-allocated objects add the object to the list of
-  deallocation.
-- Allocation and deallocations lists shared between several primitives:
-  - Device memory
-  - Pinned memory
-  - Mapped memory
-  - Streams
-  - Modules
-  - ... ?
-- Numba uses total memory size to determine how many pending deallocations it
-  will keep around - a fraction of total GPU memory determined by
-  `CUDA_DEALLOC_RATIO`.
+At present, memory management is in the `numba.cuda.cudadrv.driver` module.
+Methods of the putative `BaseCUDAMemoryManager` class above (`memalloc`, etc.)
+are methods of the `Context` class.
+
+The `Context` class maintains lists of allocations and deallocations:
+
+- `allocations` is a `numba.utils.UniqueDict`, created at context creation time.
+- `deallocations` is an instance of the `_PendingDeallocs` class, and is created
+  when `Context.prepare_for_use()` is called.
+
+These are used to track allocations and deallocations of:
+
+- Device memory
+- Pinned memory
+- Mapped memory
+- Streams
+- Events
+- Modules
+
+The `_PendingDeallocs` class is used to implement the deferred deallocation
+strategy - finalizers for the items listed above add to its list of pending
+deallocations; these finalizers are run when the objects owning them are
+garbage-collected by the Python interpreter. When a new deallocation causes the
+number or size of pending deallocations to exceed a configured ratio, the
+`_PendingDeallocs` object runs deallocators for all items it knows about and
+then clears its internal pending list.
+
+See [Deallocation Behaviour
+documentation]((https://numba.pydata.org/numba-doc/latest/cuda/memory.html#deallocation-behavior)
+for more details of this implementation.
 
 
+### Proposed changes
+
+A new module, `numba.cuda.cudadrv.memory` will be created for holding the
+majority of Numba memory management code, both internal and for EMM plugins.
+Several items from the `numba.cuda.cudadrv.driver` module will be moved over:
+
+Classes:
+
+- `_SizeNotSet`: Needed by `_PendingDeallocs`.
+- `_PendingDeallocs`: Used by internal memory management.
+
+#### Context changes
+
+The `numba.cuda.cudadrv.driver.Context` class will no longer directly allocate
+and free memory. Instead, the context will hold a reference to the memory
+manager in use, and its memory allocation methods will call into the memory
+manager, e.g.:
+
+```python
+    def memalloc(self, bytesize):
+        return self._memory_manager.memalloc(bytesize)
+
+    def memhostalloc(self, bytesize, mapped=False, portable=False, wc=False):
+        return self._memory_manager.memhostalloc(bytesize, mapped, portable, wc)
+
+    def mempin(self, owner, pointer, size, mapped=False):
+        if mapped and not self.device.CAN_MAP_HOST_MEMORY:
+            raise CudaDriverError("%s cannot map host memory" % self.device)
+
+    def prepare_for_use(self):
+        self._memory_manager.prepare_for_use()
+
+    def get_memory_info(self):
+        self._memory_manager.get_memory_info()
+
+    def get_ipc_handle(self, memory):
+        return self._memory_manager.get_ipc_handle(memory)
+
+    def reset(self):
+        # ... Already-extant reset logic, plus:
+        self._memory_manager.reset()
+```
+
+#### New components of the `memory` module
+
+- `BaseCUDAMemoryManager`: An abstract class, as defined in the plugin interface
+  above.
+- `HostOnlyCUDAMemoryManager`: A subclass of `BaseCUDAMemoryManager`, with the
+  logic from `Context.memhostalloc` and `Context.mempin` moved into it.
+- `NumbaCUDAMemoryManager`: A subclass of `HostOnlyCUDAMemoryManager`, which
+  also contains the implementation of the `memalloc` from `Context`.
+- Classes for various pointers / allocations:
+  -`MemoryPointer`,
+  - `OwnedPointer`,
+  - `AutoFreePointer`,
+  - `MappedMemory`,
+  - `PinnedMemory`,
+  - `MappedOwnedPointer`
+- `_PendingDeallocs` will also be moved here, but renamed `PendingDeallocs` as
+  it will be used from `numba.cuda.cudadrv.driver`. However, it is not part of
+  the EMM plugin interface.
 
 ## Prototyping / experimental implementation
 
