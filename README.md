@@ -183,7 +183,7 @@ are various details to the implementation the only aspect necessary to consider
 for EMM development is its initialization. The `__init__` method has the
 following interface:
 
-```
+```python
 class MemoryPointer:
     def __init__(self, context, pointer, size, finalizer=None, owner=None):
 ```
@@ -202,19 +202,19 @@ class MemoryPointer:
   an EMM plugin - the default of `None` should always suffice.
 
 
-### Providing device memory management only.
+### Providing device memory management only
 
 Some external memory managers will support management of on-device memory only.
 In order to implement an external memory manager using these easily, Numba will
 provide a memory manager class with implementations of the `memhostalloc` and
 `mempin` methods. This class:
 
-```
+```python
 class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
     # memalloc not defined - will still raise NotImplementedError
 
     def memhostalloc
-
+```
 
 ## Current model / implementation
 
