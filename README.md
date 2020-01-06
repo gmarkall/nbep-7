@@ -82,8 +82,9 @@ context manager.
 
 In addition to memory, Numba manages the allocation and deallocation of
 [streams](http://numba.pydata.org/numba-doc/latest/cuda-reference/host.html?highlight=stream#numba.cuda.stream)
-and modules (a module is a compiled object). The management of streams and
-modules should be unchanged by the presence or absence of an EMM.
+and modules (a module is a compiled object, which is generated from
+`@cuda.jit`-ted functions). The management of streams and modules should be
+unchanged by the presence or absence of an EMM.
 
 ## Non-requirements
 
@@ -100,24 +101,6 @@ will not be supported:
   e.g. for acquiring / releasing memory as discussed in [Numba Issue
   #4886](https://github.com/numba/numba/issues/4886) - these are independent,
   and can be addressed as part of separate proposals.
-
-
-# Current model / implementation
-
-- Numba Driver keeps list of allocations and deallocations
-- Finalizers for Numba-allocated objects add the object to the list of
-  deallocation.
-- Allocation and deallocations lists shared between several primitives:
-  - Device memory
-  - Pinned memory
-  - Mapped memory
-  - Streams
-  - Modules
-  - ... ?
-- Numba uses total memory size to determine how many pending deallocations it
-  will keep around - a fraction of total GPU memory determined by
-  `CUDA_DEALLOC_RATIO`.
-
 
 
 # Interface for Plugin developers
@@ -164,6 +147,8 @@ class BaseCUDAMemoryManager(object):
 
     def prepare_for_use(self, memory_info):
         raise NotImplementedError
+
+    # FIXME: Add hook for defer_cleanup here.
 ```
 
 The thre`prepare_for_use` method is called by Numba prior to any memory
@@ -175,7 +160,10 @@ should not invalidate or reset the state of the EMM.
 
 ## Representing pointers
 
-The `MemoryPointer` class is used to repre
+The `MemoryPointer` class is used to represent a pointer to memory. Whilst there
+are various details to the implementation the only aspect necessary to consider
+for EMM development is its initialization. The `__init__` method has the
+following interface:
 
 ```
 class MemoryPointer:
@@ -191,7 +179,7 @@ class MemoryPointer:
   external memory management library to inform it that the memory is no longer
   required, and that it could potentially be freed (though the EMM is not
   required to free it immediately).
-- `owner`: (FIXME: find a way to describe this and what it is used for).
+- `owner`: The owner is sometimes set by Numba's internal 
 
 
 
@@ -199,6 +187,24 @@ Some external memory managers will support management of on-device memory only.
 In order to implement an external memory manager using these easily, Numba will
 provide a memory manager class with implementations of the `memhostalloc` and
 `mempin` methods. Im
+
+
+# Current model / implementation
+
+- Numba Driver keeps list of allocations and deallocations
+- Finalizers for Numba-allocated objects add the object to the list of
+  deallocation.
+- Allocation and deallocations lists shared between several primitives:
+  - Device memory
+  - Pinned memory
+  - Mapped memory
+  - Streams
+  - Modules
+  - ... ?
+- Numba uses total memory size to determine how many pending deallocations it
+  will keep around - a fraction of total GPU memory determined by
+  `CUDA_DEALLOC_RATIO`.
+
 
 
 # Prototyping / experimental implementation
