@@ -1,7 +1,6 @@
-# nbep-7
-Numba Enhancement Proposal (NBEP) 7: External Memory Management Plugins
+# Numba Enhancement Proposal (NBEP) 7: External Memory Management Plugins
 
-# Document status
+## Document status
 
 This is a *pre-draft* - many sections are incomplete / work-in-progress and all
 subject to change significantly in the near future. A large proportion of this
@@ -9,7 +8,7 @@ document simply consists of notes that may need significant revision or moving
 out entirely.
 
 
-# Background and goals
+## Background and goals
 
 The [CUDA Array
 interface](https://numba.pydata.org/numba-doc/latest/cuda/cuda_array_interface.html)
@@ -33,7 +32,7 @@ use, Numba no longer directly allocates or frees memory when creating arrays,
 but instead requests allocations and frees through the external manager.
 
 
-# Requirements
+## Requirements
 
 Provide an *External Memory Manager (EMM)* interface in Numba.
 
@@ -47,14 +46,14 @@ If an EMM is to be used, it will entirely replace Numba's internal memory
 management for the entire execution - an interface for setting the memory
 manager will be provided.
 
-## Device v.s. Host memory
+### Device v.s. Host memory
 
 An EMM will always take responsibility for the management of device memory.
 However, not all CUDA memory management libraries also support managing host
 memory, so an option should be provided for Numba to continue the management of
 host memory, whilst ceding control of device memory to the EMM.
 
-## Deallocation strategies
+### Deallocation strategies
 
 Numba's internal memory management uses a [deallocation
 strategy](https://numba.pydata.org/numba-doc/latest/cuda/memory.html#deallocation-behavior) designed to
@@ -78,7 +77,7 @@ context manager.
     to free empty pools until `defer_cleanup` is not in use.
 
 
-## Management of other objects
+### Management of other objects
 
 In addition to memory, Numba manages the allocation and deallocation of
 [streams](http://numba.pydata.org/numba-doc/latest/cuda-reference/host.html?highlight=stream#numba.cuda.stream)
@@ -86,7 +85,7 @@ and modules (a module is a compiled object, which is generated from
 `@cuda.jit`-ted functions). The management of streams and modules should be
 unchanged by the presence or absence of an EMM.
 
-## Non-requirements
+### Non-requirements
 
 In order to minimise complexity for an initial implementation, the following
 will not be supported:
@@ -103,7 +102,7 @@ will not be supported:
   and can be addressed as part of separate proposals.
 
 
-# Interface for Plugin developers
+## Interface for Plugin developers
 
 A new module, `numba.cuda.cudadrv.memory` will be added. The relevant globals of
 this module to external memory management are:
@@ -116,7 +115,7 @@ this module to external memory management are:
   Numba.
 
 
-## Plugin Base Classes
+### Plugin Base Classes
 
 An external memory management plugin is implemented by inheriting from the
 `BaseCUDAMemoryManager` class, and registering the memory manager with Numba
@@ -158,7 +157,7 @@ called multiple times during the lifetime of the program - subsequent calls
 should not invalidate or reset the state of the EMM.
 
 
-## Representing pointers
+### Representing pointers
 
 The `MemoryPointer` class is used to represent a pointer to memory. Whilst there
 are various details to the implementation the only aspect necessary to consider
@@ -189,7 +188,7 @@ provide a memory manager class with implementations of the `memhostalloc` and
 `mempin` methods. Im
 
 
-# Current model / implementation
+## Current model / implementation
 
 - Numba Driver keeps list of allocations and deallocations
 - Finalizers for Numba-allocated objects add the object to the list of
@@ -207,7 +206,7 @@ provide a memory manager class with implementations of the `memhostalloc` and
 
 
 
-# Prototyping / experimental implementation
+## Prototyping / experimental implementation
 
 See:
 
@@ -217,7 +216,7 @@ See:
   - See [CuPy memory management docs](https://docs-cupy.chainer.org/en/stable/reference/memory.html).
 
 
-## Current implementation status
+### Current implementation status
 
 A simple allocation and free using RMM appears to work. For the example code:
 
@@ -272,7 +271,7 @@ i.e. the changes for using an external memory manager do not break the built-in
 Numba memory management.
 
 
-# To think about / expand on
+## To think about / expand on
 
 1. Interaction with context. Does the memory manager plugin need to know about
    about the context, or just use the current context?
@@ -288,12 +287,12 @@ Numba memory management.
      believe so but need to check)
 
 
-# Notes
+## Notes
 
 Mainly about implementation details / changes.
 
 
-## Devicearray
+### Devicearray
 
 Device array creates memory pointer from driver. Should be abstracted into
 method to get a pointer instead of constructing directly? e.g. at the moment:
@@ -304,7 +303,7 @@ gpu_data = _memory.MemoryPointer(context=devices.get_context(),
 ```
 
 
-## Allocations / deallocations in driver
+### Allocations / deallocations in driver
 
 Whilst the exposure of these is useful for testing, it's not clear that these
 should be anything other than an implementation detail (perhaps this can be
@@ -363,7 +362,7 @@ def _module_finalizer(context, handle):
 Here the deallocations list is used for unloading the module rather than
 deallocating memory. Probably wants separating out!
 
-### Ownership
+#### Ownership
 
 Who should keep a list of pending deallocations?
 - Numba has them for GPU arrays because it might eventually want to free them
@@ -392,7 +391,7 @@ index 7832955..f2c1352 100644
 +        return newmem
 ```
 
-## Relying on driver for memory info
+### Relying on driver for memory info
 
 We don't want to rely on the driver for info about memory, e.g. when
 initialising the memory manager from the context:
@@ -408,13 +407,13 @@ initialising the memory manager from the context:
 Maybe the context could be passed in to the memory manager for its
 initialisation if necessary.
 
-## Defer cleanup
+### Defer cleanup
 
 Deferring cleanup needs to be taken into account (See S3.3.7 -
 http://numba.pydata.org/numba-doc/latest/cuda/memory.html)
 
 
-## Testing
+### Testing
 
 Will need some test refactoring, e.g.
 
@@ -455,15 +454,15 @@ Will need some test refactoring, e.g.
     deallocations list, which will become tests of Numba's "bundled" memory
     manager.
 
-# Questions / Discussion
+## Questions / Discussion
 
-## Stream parameter to alloc / free
+### Stream parameter to alloc / free
 
 Does the interface need to provide a stream to use for the allocation /
 deallocation? Some memory managers accept a stream parameter (e.g. RMM and
 underneath it CNMeM, etc).
 
-## IPC handles
+### IPC handles
 
 In RMM:
 
