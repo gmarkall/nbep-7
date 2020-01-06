@@ -449,4 +449,33 @@ Will need some test refactoring, e.g.
     deallocations list, which will become tests of Numba's "bundled" memory
     manager.
 
+# Questions / Discussion
 
+## Stream parameter to alloc / free
+
+Does the interface need to provide a stream to use for the allocation /
+deallocation? Some memory managers accept a stream parameter (e.g. RMM and
+underneath it CNMeM, etc).
+
+## IPC handles
+
+In RMM:
+
+```python
+def get_ipc_handle(ary, stream=0):
+    """
+    Get an IPC handle from the DeviceArray ary with offset modified by
+    the RMM memory pool.
+    """
+    ipch = cuda.devices.get_context().get_ipc_handle(ary.gpu_data)
+    ptr = ary.device_ctypes_pointer.value
+    offset = librmm.rmm_getallocationoffset(ptr, stream)
+    # replace offset with RMM's offset
+    ipch.offset = offset
+    desc = dict(shape=ary.shape, strides=ary.strides, dtype=ary.dtype)
+    return cuda.cudadrv.devicearray.IpcArrayHandle(
+        ipc_handle=ipch, array_desc=desc
+    )
+```
+
+Figure out the consequences of this.
