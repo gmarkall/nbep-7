@@ -184,7 +184,7 @@ class BaseCUDAMemoryManager(object):
         """
         raise NotImplementedError
 
-    def get_ipc_handle(self, memory):
+    def get_ipc_handle(self, memory, stream):
         """
         Return an `IpcHandle` from a GPU allocation
         """
