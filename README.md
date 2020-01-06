@@ -124,35 +124,54 @@ is defined as:
 
 ```python
 class BaseCUDAMemoryManager(object):
-    def memalloc(self, nbytes):
+    def memalloc(self, nbytes, stream=0):
         """
-        Allocate `nbytes` of on-device memory in the current context.
-        Returns a MemoryPointer to the allocated memory.
+        Allocate on-device memory in the current context. Arguments:
+        
+        - `nbytes`: Size of allocation in bytes
+        - `stream`: Stream to use for the allocation (if relevant)
+        
+        Returns: a MemoryPointer to the allocated memory.
         """
         raise NotImplementedError
 
-    def memhostalloc(self, bytesize, mapped, portable, wc):
+    def memhostalloc(self, nbytes, mapped, portable, wc):
         """
-        Allocate `nbytes` of pinned host memory.
+        Allocate pinned host memory. Arguments:
+
+        - `nbytes`: Size of the allocation in bytes
+        - `mapped`: Whether the allocated memory should be mapped into the CUDA
+                    address space.
+        - `portable`: Whether the memory will be considered pinned by all
+                      contexts, and not just the calling context.
+        - `wc`: Whether to allocate the memory as write-combined.
         """
         raise NotImplementedError
 
     def mempin(self, owner, pointer, size, mapped):
         """
-        Pin memory that is already allocated
-        FIXME: Better description.
+        Pin a region of host memory that is already allocated. Arguments:
+
+        - `owner`: An object owning the memory - e.g. a `DeviceNDArray`.
+        - `pointer`: The pointer to the beginning of the region to pin.
+        - `size`: The size of the region to pin.
+        - `mapped`: Whether the region should also be mapped into device memory.
         """
         raise NotImplementedError
 
-    def prepare_for_use(self, memory_info):
+    def prepare_for_use(self):
+        """
+        Perform any initialization required for the EMM plugin to be ready to
+        use.
+        """
         raise NotImplementedError
 
     # FIXME: Add hook for defer_cleanup here.
 ```
 
-The thre`prepare_for_use` method is called by Numba prior to any memory
-allocations being requested. This gives the EMM an opportunity to initialize any
-data structures etc. that it needs for its normal operations. The method may be
+The `prepare_for_use` method is called by Numba prior to any memory allocations
+being requested. This gives the EMM an opportunity to initialize any data
+structures etc. that it needs for its normal operations. The method may be
 called multiple times during the lifetime of the program - subsequent calls
 should not invalidate or reset the state of the EMM.
 
@@ -178,14 +197,23 @@ class MemoryPointer:
   external memory management library to inform it that the memory is no longer
   required, and that it could potentially be freed (though the EMM is not
   required to free it immediately).
-- `owner`: The owner is sometimes set by Numba's internal 
+- `owner`: The owner is sometimes set by the internals of the class, or used for
+  Numba's internal memory management, but need not be provided by the writer of
+  an EMM plugin - the default of `None` should always suffice.
 
 
+### Providing device memory management only.
 
 Some external memory managers will support management of on-device memory only.
 In order to implement an external memory manager using these easily, Numba will
 provide a memory manager class with implementations of the `memhostalloc` and
-`mempin` methods. Im
+`mempin` methods. This class:
+
+```
+class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
+    # memalloc not defined - will still raise NotImplementedError
+
+    def memhostalloc
 
 
 ## Current model / implementation
@@ -455,12 +483,6 @@ Will need some test refactoring, e.g.
     manager.
 
 ## Questions / Discussion
-
-### Stream parameter to alloc / free
-
-Does the interface need to provide a stream to use for the allocation /
-deallocation? Some memory managers accept a stream parameter (e.g. RMM and
-underneath it CNMeM, etc).
 
 ### IPC handles
 
