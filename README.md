@@ -11,19 +11,41 @@ out entirely.
 
 # Background and goals
 
-- CUDA Array interface allows sharing of data between different GPU-accelerated
-  Python libraries.
-- However, each manages its own memory:
-  - Numba has internal memory management for creation of device arrays
-  - RAPIDS (cuDF, etc.) use the Rapids Memory Manager (RMM).
-  - CuPy includes a memory pool implementation for both device and pinned
-    memory.
+The [CUDA Array
+interface](https://numba.pydata.org/numba-doc/latest/cuda/cuda_array_interface.html)
+enables sharing of data between different Python libraries that provide access
+to the GPU. However, each library manages its own memory distinctly from the
+others. For example:
+
+- [Numba](https://numba.pydata.org/) internally manages memory for the creation
+  of device and mapped host arrays.
+- [The RAPIDS libraries](https://rapids.ai/) (cuDF, cuML, etc.) use the [Rapids
+  Memory Manager (RMM)](https://github.com/rapidsai/rmm) for allocating device
+  memory.
+- [CuPy](https://cupy.chainer.org/) includes a [memory pool
+  implementation](https://docs-cupy.chainer.org/en/stable/reference/memory.html)
+  for both device and pinned memory.
 
 The goal of this NBEP is to enable Numba's internal memory management to be
 replaced by the user with a plugin interface, so that Numba requests allocations
 and frees from an external memory manager. I.e. Numba no longer directly
 allocates and frees device memory when creating device arrays, but instead
 requests allocations from the external manager.
+
+
+# Requirements
+
+- Allow Numba to continue managing host memory (mapped / pinned)
+- Allow Numba to carry on managing streams / modules etc.
+- Enable a different deallocation strategy to be used by plugins
+  - Will need some test modifications - quite a few check the allocations /
+    deallocations list, which will become tests of Numba's "bundled" memory
+    manager.
+- Ensure that Numba goes through the plugin for ALL allocations, and never
+  directly to the driver.
+- May need to fix some ambiguity around lifetimes for `__cuda_array_interface__`
+  - see e.g.[ Numba Issue #4886](https://github.com/numba/numba/issues/4886).
+
 
 
 # Current model / implementation
@@ -42,19 +64,6 @@ requests allocations from the external manager.
   will keep around - a fraction of total GPU memory determined by
   `CUDA_DEALLOC_RATIO`.
 
-
-# Potential requirements
-
-- Allow Numba to continue managing host memory (mapped / pinned)
-- Allow Numba to carry on managing streams / modules etc.
-- Enable a different deallocation strategy to be used by plugins
-  - Will need some test modifications - quite a few check the allocations /
-    deallocations list, which will become tests of Numba's "bundled" memory
-    manager.
-- Ensure that Numba goes through the plugin for ALL allocations, and never
-  directly to the driver.
-- May need to fix some ambiguity around lifetimes for `__cuda_array_interface__`
-  - see e.g.[ Numba Issue #4886](https://github.com/numba/numba/issues/4886).
 
 
 # Interface for Plugin developers
