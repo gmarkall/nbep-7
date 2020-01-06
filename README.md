@@ -274,7 +274,85 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
     def memhostalloc
 ```
 
-## Current model / implementation
+
+## Example implementation - RAPIDS Memory Manager
+
+Additions to `python/rmm/rmm.py` in [RMM](https://github.com:rapidsai/rmm):
+
+```python
+# New imports:
+from numba.cuda.cudadrv.memory import HostOnlyCUDAMemoryManager, MemoryPointer
+
+# New class:
+class RMMNumbaManager(HostOnlyCUDAMemoryManager):
+    def __init__(self, logging=False):
+        self._initialized = False
+        self._logging = logging
+
+    def memalloc(self, bytesize, stream=0):
+        addr = librmm.rmm_alloc(bytesize, stream)
+        ctx = cuda.current_context()
+        ptr = ctypes.c_uint64(int(addr))
+        finalizer = _make_finalizer(addr, stream)
+        return MemoryPointer(ctx, ptr, bytesize, finalizer=finalizer)
+
+    def prepare_for_use(self):
+        if not self._initialized:
+            reinitialize(logging=self._logging)
+
+# The existing _make_finalizer function is used by RMMNumbaManager:
+def _make_finalizer(handle, stream):
+    """
+    Factory to make the finalizer function.
+    We need to bind *handle* and *stream* into the actual finalizer, which
+    takes no args.
+    """
+
+    def finalizer():
+        """
+        Invoked when the MemoryPointer is freed
+        """
+        librmm.rmm_free(handle, stream)
+        #print(csv_log())
+
+    return finalizer
+
+# Utility function register `RMMNumbaManager` as an EMM:
+def use_rmm_for_numba():
+    cuda.cudadrv.driver.set_memory_manager(RMMNumbaManager)
+```
+
+### Example usage
+
+```python
+import rmm 
+import numpy as np
+
+from numba import cuda
+
+rmm.use_rmm_for_numba()
+
+a = np.zeros(10)
+d_a = cuda.to_device(a)
+del(d_a)
+print(rmm.csv_log())
+```
+
+Results in the following output:
+
+```
+Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,Total Memory,Current Allocs,Start,End,Elapsed,Location
+Alloc,0,0x7fae06600000,0,80,0,0,1,1.10549,1.1074,0.00191666,/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py:683
+Free,0,0x7fae06600000,0,0,0,0,0,1.10798,1.10921,0.00122238,/home/nfs/gmarkall/numbadev/numba/numba/utils.py:678
+```
+
+Note that there is some scope for improvement in RMM for detecting the line
+number at which the allocation / free occurred, but this is outside the scope of
+the example in this proposal.
+
+## Numba internal changes
+
+### Current model / implementation
 
 - Numba Driver keeps list of allocations and deallocations
 - Finalizers for Numba-allocated objects add the object to the list of
