@@ -9,7 +9,7 @@ document simply consists of notes that may need significant revision or moving
 out entirely.
 
 
-# Background
+# Background and goals
 
 - CUDA Array interface allows sharing of data between different GPU-accelerated
   Python libraries.
@@ -57,27 +57,85 @@ requests allocations from the external manager.
   - see e.g.[ Numba Issue #4886](https://github.com/numba/numba/issues/4886).
 
 
-# Interface
+# Interface for Plugin developers
 
-Based on outlining functions from driver module:
+A new module, `numba.cuda.cudadrv.memory` will be added. The relevant globals of
+this module to external memory management are:
+
+- `BaseCUDAMemoryManager` and `HostOnlyCUDAMemoryManager`: base classes for
+  external memory management plugins.
+- `MemoryPointer`: used to encapsulate information about a pointer to device- or
+  host-memory.
+- `set_memory_manager`: a method for registering an external memory manager with
+  Numba.
+
+
+## Plugin Base Classes
+
+An external memory management plugin is implemented by inheriting from the
+`BaseCUDAMemoryManager` class, and registering the memory manager with Numba
+prior to the execution of any CUDA operations. The `BaseCUDAMemoryManager` class
+is defined as:
 
 ```python
 class BaseCUDAMemoryManager(object):
-    def memalloc(self, bytesize):
+    def memalloc(self, nbytes):
+        """
+        Allocate `nbytes` of on-device memory in the current context.
+        Returns a MemoryPointer to the allocated memory.
+        """
         raise NotImplementedError
 
     def memhostalloc(self, bytesize, mapped, portable, wc):
+        """
+        Allocate `nbytes` of pinned host memory.
+        """
         raise NotImplementedError
 
     def mempin(self, owner, pointer, size, mapped):
+        """
+        Pin memory that is already allocated
+        FIXME: Better description.
+        """
         raise NotImplementedError
 
     def prepare_for_use(self, memory_info):
         raise NotImplementedError
 ```
 
-Maybe want to have the option for the Numba memory management for host
-allocations? (e.g. if RMM or other library does not support it?
+The thre`prepare_for_use` method is called by Numba prior to any memory
+allocations being requested. This gives the EMM an opportunity to initialize any
+data structures etc. that it needs for its normal operations. The method may be
+called multiple times during the lifetime of the program - subsequent calls
+should not invalidate or reset the state of the EMM.
+
+
+## Representing pointers
+
+The `MemoryPointer` class is used to repre
+
+```
+class MemoryPointer:
+    def __init__(self, context, pointer, size, finalizer=None, owner=None):
+```
+
+- `context`: The context in which the pointer was allocated.
+- `pointer`: A `ctypes` pointer type (e.g. `ctypes.c_uint64`) holding the
+  address of the memory.
+- `size`: The size of the allocation in bytes.
+- `finalizer`: A method that is called when the last reference to the
+  `MemoryPointer` object is released. Usually this will make a call to the
+  external memory management library to inform it that the memory is no longer
+  required, and that it could potentially be freed (though the EMM is not
+  required to free it immediately).
+- `owner`: (FIXME: find a way to describe this and what it is used for).
+
+
+
+Some external memory managers will support management of on-device memory only.
+In order to implement an external memory manager using these easily, Numba will
+provide a memory manager class with implementations of the `memhostalloc` and
+`mempin` methods. Im
 
 
 # Prototyping / experimental implementation
@@ -125,21 +183,20 @@ test results at present running with:
 NUMBA_CUDA_MEMORY_MANAGER=RMM python -m numba.runtests numba.cuda.tests
 ```
 
-
 is:
 
 ```
-Ran 517 tests in 167.274s
+Ran 517 tests in 146.964s
 
-OK (skipped=14)
+OK (skipped=10)
 ```
 
 When running with the built-in Numba memory management, the output is:
 
 ```
-Ran 517 tests in 155.316s
+Ran 517 tests in 137.271s
 
-OK (skipped=8)
+OK (skipped=4)
 ```
 
 i.e. the changes for using an external memory manager do not break the built-in
@@ -281,6 +338,11 @@ initialising the memory manager from the context:
 
 Maybe the context could be passed in to the memory manager for its
 initialisation if necessary.
+
+## Defer cleanup
+
+Deferring cleanup needs to be taken into account (See S3.3.7 -
+http://numba.pydata.org/numba-doc/latest/cuda/memory.html)
 
 
 ## Testing
