@@ -465,6 +465,71 @@ manager, e.g.:
   it will be used from `numba.cuda.cudadrv.driver`. However, it is not part of
   the EMM plugin interface.
 
+
+#### Staged IPC
+
+Staged IPC should not own the memory it allocates:
+
+```
+diff --git a/numba/cuda/cudadrv/driver.py b/numba/cuda/cudadrv/driver.py
+index 7832955..f2c1352 100644
+--- a/numba/cuda/cudadrv/driver.py
++++ b/numba/cuda/cudadrv/driver.py
+@@ -922,7 +922,11 @@ class _StagedIpcImpl(object):
+         with cuda.gpus[srcdev.id]:
+             impl.close()
+
+-        return newmem.own()
++        # This used to be newmem.own() but the own() was removed - when the
++        # Numba CUDA memory manager is used, the pointer is already owned -
++        # when another memory manager is used, it is incorrect to take
++        # ownership of the pointer.
++        return newmem
+```
+
+
+#### Testing
+
+Will need some test refactoring, e.g.
+
+```diff
+--- a/numba/cuda/tests/cudadrv/test_cuda_memory.py
++++ b/numba/cuda/tests/cudadrv/test_cuda_memory.py
+@@ -2,7 +2,7 @@ import ctypes
+
+ import numpy as np
+
+-from numba.cuda.cudadrv import driver, drvapi, devices
++from numba.cuda.cudadrv import driver, drvapi, devices, memory
+ from numba.cuda.testing import unittest, CUDATestCase
+ from numba.utils import IS_PY3
+ from numba.cuda.testing import skip_on_cudasim
+@@ -77,14 +77,14 @@ class TestCudaMemory(CUDATestCase):
+             dtor_invoked[0] += 1
+
+         # Ensure finalizer is called when pointer is deleted
+-        ptr = driver.MemoryPointer(context=self.context, pointer=fake_ptr,
+-                                   size=40, finalizer=dtor)
++        ptr = memory.MemoryPointer(context=self.context, pointer=fake_ptr,
++                                           size=40, finalizer=dtor)
+         self.assertEqual(dtor_invoked[0], 0)
+         del ptr
+         self.assertEqual(dtor_invoked[0], 1)
+
+         # Ensure removing derived pointer doesn't call finalizer
+-        ptr = driver.MemoryPointer(context=self.context, pointer=fake_ptr,
++        ptr = memory.MemoryPointer(context=self.context, pointer=fake_ptr,
+                                    size=40, finalizer=dtor)
+         owned = ptr.own()
+         del owned
+```
+
+- Enabling a different deallocation strategy to be used by plugins:
+  - Will need some test modifications - quite a few check the allocations /
+    deallocations list, which will become tests of Numba's "bundled" memory
+    manager.
+
+
 ## Prototyping / experimental implementation
 
 See:
@@ -561,67 +626,4 @@ gpu_data = _memory.MemoryPointer(context=devices.get_context(),
                                  pointer=c_void_p(0), size=0)
 ```
 
-### Staged IPC
-
-
-Staged IPC should not own the memory it allocates:
-
-```
-diff --git a/numba/cuda/cudadrv/driver.py b/numba/cuda/cudadrv/driver.py
-index 7832955..f2c1352 100644
---- a/numba/cuda/cudadrv/driver.py
-+++ b/numba/cuda/cudadrv/driver.py
-@@ -922,7 +922,11 @@ class _StagedIpcImpl(object):
-         with cuda.gpus[srcdev.id]:
-             impl.close()
-
--        return newmem.own()
-+        # This used to be newmem.own() but the own() was removed - when the
-+        # Numba CUDA memory manager is used, the pointer is already owned -
-+        # when another memory manager is used, it is incorrect to take
-+        # ownership of the pointer.
-+        return newmem
-```
-
-
-### Testing
-
-Will need some test refactoring, e.g.
-
-```diff
---- a/numba/cuda/tests/cudadrv/test_cuda_memory.py
-+++ b/numba/cuda/tests/cudadrv/test_cuda_memory.py
-@@ -2,7 +2,7 @@ import ctypes
-
- import numpy as np
-
--from numba.cuda.cudadrv import driver, drvapi, devices
-+from numba.cuda.cudadrv import driver, drvapi, devices, memory
- from numba.cuda.testing import unittest, CUDATestCase
- from numba.utils import IS_PY3
- from numba.cuda.testing import skip_on_cudasim
-@@ -77,14 +77,14 @@ class TestCudaMemory(CUDATestCase):
-             dtor_invoked[0] += 1
-
-         # Ensure finalizer is called when pointer is deleted
--        ptr = driver.MemoryPointer(context=self.context, pointer=fake_ptr,
--                                   size=40, finalizer=dtor)
-+        ptr = memory.MemoryPointer(context=self.context, pointer=fake_ptr,
-+                                           size=40, finalizer=dtor)
-         self.assertEqual(dtor_invoked[0], 0)
-         del ptr
-         self.assertEqual(dtor_invoked[0], 1)
-
-         # Ensure removing derived pointer doesn't call finalizer
--        ptr = driver.MemoryPointer(context=self.context, pointer=fake_ptr,
-+        ptr = memory.MemoryPointer(context=self.context, pointer=fake_ptr,
-                                    size=40, finalizer=dtor)
-         owned = ptr.own()
-         del owned
-```
-
-- Enabling a different deallocation strategy to be used by plugins:
-  - Will need some test modifications - quite a few check the allocations /
-    deallocations list, which will become tests of Numba's "bundled" memory
-    manager.
 
