@@ -442,7 +442,7 @@ del(d_a)
 print(rmm.csv_log())
 ```
 
-Results in the following output:
+Should result in output similar to the following:
 
 ```
 Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,Total Memory,Current Allocs,Start,End,Elapsed,Location
