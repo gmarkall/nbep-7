@@ -127,7 +127,8 @@ prior to the execution of any CUDA operations. The `BaseCUDAMemoryManager` class
 is defined as:
 
 ```python
-class BaseCUDAMemoryManager(object):
+class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
+    @abstractmethod
     def memalloc(self, nbytes, stream=0):
         """
         Allocate on-device memory in the current context. Arguments:
@@ -137,8 +138,8 @@ class BaseCUDAMemoryManager(object):
         
         Returns: a `MemoryPointer` to the allocated memory.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     def memhostalloc(self, nbytes, mapped, portable, wc):
         """
         Allocate pinned host memory. Arguments:
@@ -154,8 +155,8 @@ class BaseCUDAMemoryManager(object):
         allocated memory, depending on whether the region was mapped into
         device memory.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     def mempin(self, owner, pointer, size, mapped):
         """
         Pin a region of host memory that is already allocated. Arguments:
@@ -169,33 +170,38 @@ class BaseCUDAMemoryManager(object):
         allocated memory, depending on whether the region was mapped into device
         memory.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     def prepare_for_use(self):
         """
         Perform any initialization required for the EMM plugin to be ready to
         use.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     def get_memory_info(self):
         """
         Returns (free, total) memory in bytes in the context
         """
-        raise NotImplementedError
 
+    @abstractmethod
     def get_ipc_handle(self, memory, stream):
         """
         Return an `IpcHandle` from a GPU allocation
         """
-        raise NotImplementedError
 
+    @abstractmethod
     def reset(self):
         """
         Clear up all resources in this context.
         """
 
-    # FIXME: Add hook for defer_cleanup here.
+    @abstractmethod
+    def defer_cleanup(self):
+        """
+        Returns a context manager that ensures the implementation of deferred
+        cleanup whilst it is active.
+        """
 ```
 
 The `prepare_for_use` method is called by Numba prior to any memory allocations
@@ -292,13 +298,21 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
 ```
 
 
-## Example implementation - RAPIDS Memory Manager
+## Example implementation - A RAPIDS Memory Manager (RMM) Plugin
 
-Additions to `python/rmm/rmm.py` in [RMM](https://github.com:rapidsai/rmm):
+An implementation of an EMM plugin within the [Rapids Memory Manager
+(RMM)RMM](https://github.com:rapidsai/rmm) is sketched out in this section. This
+is intended to show an overview of the implementation in order to support the
+descriptions above and to illustrate how the plugin interface can be used - it
+has not presently been tested to be correct or complete.
+
+The plugin implementation consists of additions to `python/rmm/rmm.py`:
 
 ```python
 # New imports:
+from contextlib import context_manager
 from numba.cuda.cudadrv.memory import HostOnlyCUDAMemoryManager, MemoryPointer
+
 
 # New class:
 class RMMNumbaManager(HostOnlyCUDAMemoryManager):
@@ -313,9 +327,42 @@ class RMMNumbaManager(HostOnlyCUDAMemoryManager):
         finalizer = _make_finalizer(addr, stream)
         return MemoryPointer(ctx, ptr, bytesize, finalizer=finalizer)
 
+   def get_ipc_handle(self, memory, stream=0):
+        """ 
+	Get an IPC handle for the memory with offset modified by the RMM memory
+        pool.
+        """
+        # Not a very clean implementation - may want to implement something at
+        # the C++ layer for this, and also not rely on borrowing bits of Numba
+        # internals to initialise ipchandle.
+        ipchandle = (ctypes.c_byte * 64)()  # IPC handle is 64 bytes
+        cuda.cudadrv.memory.driver_funcs.cuIpcGetMemHandle(
+            ctypes.byref(ipchandle),
+            memory.owner.handle,
+        )   
+        source_info = cuda.current_context().device.get_device_identity()
+        ptr = memory.device_ctypes_pointer.value
+        offset = librmm.rmm_getallocationoffset(ptr, stream)
+        from numba.cuda.cudadrv.driver import IpcHandle
+        return IpcHandle(memory, ipchandle, memory.size, source_info,
+                         offset=offset)
+
+    def get_memory_info(self):
+        return get_memory_info()
+
     def prepare_for_use(self):
         if not self._initialized:
             reinitialize(logging=self._logging)
+
+    def reset(self):
+        reinitialize(logging=self._logging)
+
+    @contextmanager
+    def defer_cleanup(self):
+        # Does nothing to defer cleanup - a full implementation may choose to
+        implement a different policy.
+        yield
+
 
 # The existing _make_finalizer function is used by RMMNumbaManager:
 def _make_finalizer(handle, stream):
@@ -330,7 +377,6 @@ def _make_finalizer(handle, stream):
         Invoked when the MemoryPointer is freed
         """
         librmm.rmm_free(handle, stream)
-        #print(csv_log())
 
     return finalizer
 
