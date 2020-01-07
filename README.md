@@ -288,14 +288,55 @@ class PinnedMemory(mviewbuf.MemAlloc):
 Some external memory managers will support management of on-device memory only.
 In order to implement an external memory manager using these easily, Numba will
 provide a memory manager class with implementations of the `memhostalloc` and
-`mempin` methods. This class:
+`mempin` methods. An abridged definition of this class follows:
 
 ```python
 class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
-    # memalloc not defined - will still raise NotImplementedError
+    # Unimplemented methods:
+    #
+    # - memalloc
+    # - get_memory_info
 
-    def memhostalloc
+    def memhostalloc(self, nbytes, mapped, portable, wc):
+        # Implemented.
+
+    def mempin(self, owner, pointer, size, mapped):
+        # Implemented.
+
+    def prepare_for_use(self):
+        # Implemented.
+        #
+        # Must be called by any subclass when its prepare_for_use() method is
+        # called.
+
+    def reset(self):
+        # Implemented.
+        #
+        # Must be called by any subclass when its prepare_for_use() method is
+        # called.
+
+    def defer_cleanup(self):
+        # Implemented.
+        #
+        # Must be called by any subclass when its prepare_for_use() method is
+        # called.
 ```
+
+A class can subclass the `HostOnlyCUDAMemoryManager` and then it only needs to
+add implementations of methods for on-device memory. Any subclass must observe
+the following rules:
+
+- The subclass must implement `memalloc` and `get_memory_info`.
+- The `prepare_for_use` and `reset` methods perform initialisation of structures
+  used by the `HostOnlyCUDAMemoryManager`.
+  - If the subclass has nothing to do on initialisation (possibly) or reset
+    (unlikely) then it need not implement these methods. 
+  - However, if it does implement these methods then it must also call the
+    methods from `HostOnlyCUDAMemoryManager` in its own implementations.
+- Similarly if `defer_cleanup` is implemented, it should enter the context
+  provided by `HostOnlyCUDAManager.defer_cleanup()` prior to `yield`ing (or in
+  the `__enter__` method) and release it prior to exiting (or in the `__exit__`
+  method).
 
 
 ## Example implementation - A RAPIDS Memory Manager (RMM) Plugin
