@@ -561,75 +561,8 @@ gpu_data = _memory.MemoryPointer(context=devices.get_context(),
                                  pointer=c_void_p(0), size=0)
 ```
 
+### Staged IPC
 
-### Allocations / deallocations in driver
-
-Whilst the exposure of these is useful for testing, it's not clear that these
-should be anything other than an implementation detail (perhaps this can be
-kept internal to Numba and not visible to the memory manager plugin interface).
-At present with memory manager, they're exposed as:
-
-```python
-    @property
-    def allocations(self):
-        return self._memory_manager.allocations
-
-    @allocations.setter
-    def allocations(self, value):
-        self._memory_manager.allocations = value
-
-    @allocations.deleter
-    def allocations(self):
-        del self._memory_manager.allocations
-
-    @property
-    def deallocations(self):
-        return self._memory_manager.deallocations
-
-    @deallocations.setter
-    def deallocations(self, value):
-        self._memory_manager.deallocations = value
-
-    @deallocations.deleter
-    def deallocations(self):
-        del self._memory_manager.deallocations
-```
-
-There are some uses of them in the driver, e.g.:
-
-
-```python
-def _module_finalizer(context, handle):
-    dealloc = context.deallocations
-    modules = context.modules
-
-    def core():
-        shutting_down = utils.shutting_down  # early bind
-
-        def module_unload(handle):
-            # If we are not shutting down, we must be called due to
-            # Context.reset() of Context.unload_module().  Both must have
-            # cleared the module reference from the context.
-            assert shutting_down() or handle.value not in modules
-            driver.cuModuleUnload(handle)
-
-        dealloc.add_item(module_unload, handle)
-
-    return core
-```
-
-Here the deallocations list is used for unloading the module rather than
-deallocating memory. Probably wants separating out!
-
-#### Ownership
-
-Who should keep a list of pending deallocations?
-- Numba has them for GPU arrays because it might eventually want to free them
-- It also has them for streams, modules, and host allocations (and maybe other
-  things not mentioned here), which it may need to keep (the memory manager
-  plugin may not manage them).
-- The deallocation policy of the external plugin may not match what Numba would
-  do, so it will want some control over it.
 
 Staged IPC should not own the memory it allocates:
 
@@ -649,27 +582,6 @@ index 7832955..f2c1352 100644
 +        # ownership of the pointer.
 +        return newmem
 ```
-
-### Relying on driver for memory info
-
-We don't want to rely on the driver for info about memory, e.g. when
-initialising the memory manager from the context:
-
-```python
-    def prepare_for_use(self):
-        """Initialize the context for use.
-        It's safe to be called multiple times.
-        """
-        self._memory_manager.prepare_for_use(self.get_memory_info().total)
-```
-
-Maybe the context could be passed in to the memory manager for its
-initialisation if necessary.
-
-### Defer cleanup
-
-Deferring cleanup needs to be taken into account (See S3.3.7 -
-http://numba.pydata.org/numba-doc/latest/cuda/memory.html)
 
 
 ### Testing
@@ -713,27 +625,3 @@ Will need some test refactoring, e.g.
     deallocations list, which will become tests of Numba's "bundled" memory
     manager.
 
-## Questions / Discussion
-
-### IPC handles
-
-In RMM:
-
-```python
-def get_ipc_handle(ary, stream=0):
-    """
-    Get an IPC handle from the DeviceArray ary with offset modified by
-    the RMM memory pool.
-    """
-    ipch = cuda.devices.get_context().get_ipc_handle(ary.gpu_data)
-    ptr = ary.device_ctypes_pointer.value
-    offset = librmm.rmm_getallocationoffset(ptr, stream)
-    # replace offset with RMM's offset
-    ipch.offset = offset
-    desc = dict(shape=ary.shape, strides=ary.strides, dtype=ary.dtype)
-    return cuda.cudadrv.devicearray.IpcArrayHandle(
-        ipc_handle=ipch, array_desc=desc
-    )
-```
-
-Figure out the consequences of this.
