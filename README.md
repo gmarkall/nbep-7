@@ -540,7 +540,10 @@ manager, e.g.:
 - `HostOnlyCUDAMemoryManager`: A subclass of `BaseCUDAMemoryManager`, with the
   logic from `Context.memhostalloc` and `Context.mempin` moved into it.
 - `NumbaCUDAMemoryManager`: A subclass of `HostOnlyCUDAMemoryManager`, which
-  also contains the implementation of the `memalloc` from `Context`.
+  also contains the implementation of the `memalloc` from `Context`. This is the
+  default memory manager, and its use preserves the behaviour of Numba prior to
+  the addition of the EMM Plugin interface - that is, all memory allocation and
+  deallocation for Numba arrays is handled within Numba.
 - Classes for various pointers / allocations:
   -`MemoryPointer`,
   - `OwnedPointer`,
@@ -619,17 +622,31 @@ Will need some test refactoring, e.g.
 
 ## Prototyping / experimental implementation
 
-See:
+Some prototyping and experimental implementations have been produced to guide
+the designs presented in this document. The implementations presently do not
+fully align with the design outlined here, but were used for proving the
+concept for various aspects of the design. In particular the interface does not
+provide such clean boundaries as outlined in the above design, but instead
+provides a little more than the minumum required to implement external memory
+management plugins using RMM (and potentially others, e.g, CuPy, but these are
+as-yet unimplemented.
+
+It is expected that as the design and document evolve towards completion, the
+prototype implementations will be modified to more closely align with the
+specification.
+
+The current implementations can be found in:
 
 - Numba branch: https://github.com/gmarkall/numba/tree/grm-numba-nbep-7.
 - RMM branch: https://github.com/gmarkall/rmm/tree/grm-numba-nbep-7.
-- CuPy branch: To be addressed in future.
+- CuPy branch: Potentially to be created in the future.
   - See [CuPy memory management docs](https://docs-cupy.chainer.org/en/stable/reference/memory.html).
 
 
 ### Current implementation status
 
-A simple allocation and free using RMM appears to work. For the example code:
+For a minimal example, a simple allocation and free using RMM works as expected.
+For the example code:
 
 ```python
 import rmm
@@ -645,7 +662,7 @@ del(d_a)
 print(rmm.csv_log())
 ```
 
-We see:
+We see the following output:
 
 ```
 Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,Total Memory,Current Allocs,Start,End,Elapsed,Location
@@ -653,16 +670,23 @@ Alloc,0,0x7fae06600000,0,80,0,0,1,1.10549,1.1074,0.00191666,/home/nfs/gmarkall/n
 Free,0,0x7fae06600000,0,0,0,0,0,1.10798,1.10921,0.00122238,/home/nfs/gmarkall/numbadev/numba/numba/utils.py:678
 ```
 
+This provides a small example - however, the whole Numba test suite also passes
+using an EMM Plugin.
+
+
 ### Numba CUDA Unit tests
 
-All relevant unit tests pass with the prototype branch. A summary of the unit
-test results at present running with:
+All relevant unit tests pass with the prototype branch. The unit test suite can
+be run with the RMM EMM Plugin with:
 
 ```
 NUMBA_CUDA_MEMORY_MANAGER=RMM python -m numba.runtests numba.cuda.tests
 ```
 
-is:
+Note that this is slightly different to the proposed environment variable for
+setting the EMM Plugin, but matches the current prototype implementation. A
+summary of the unit test suite output is:
+
 
 ```
 Ran 517 tests in 146.964s
@@ -679,23 +703,14 @@ OK (skipped=4)
 ```
 
 i.e. the changes for using an external memory manager do not break the built-in
-Numba memory management.
+Numba memory management. There are an additional 6 skipped tests, from:
 
-
-## To think about / expand on
-
-1. Interaction with context. Does the memory manager plugin need to know about
-   about the context, or just use the current context?
-   - Should each context have its own memory manager?
-     - Does RMM have one manager per context?
-2. How about resetting the context?
-   - Need to notify the memory manager plugin that the context was reset so it
-     can invalidate its own handles, maybe?
-3. What about streams?
-   - RMM accepts stream parameter
-     - (How) does this map to `cudaMalloc`?
-   - Does the Numba CUDA target ignore the stream for allocations anyway? (I
-     believe so but need to check)
+- `TestDeallocation`: skipped as it specifically tests Numba's internal
+  deallocation strategy.
+- `TestDeferCleanup`: skipped as it specifically tests Numba's implementation of
+  deferred cleanup.
+- `TestCudaArrayInterface.test_ownership`: skipped as Numba does not own memory
+  when an EMM Plugin is used, but ownership is assumed by this test case.
 
 
 ## Notes
@@ -713,4 +728,9 @@ gpu_data = _memory.MemoryPointer(context=devices.get_context(),
                                  pointer=c_void_p(0), size=0)
 ```
 
+## To think about / expand on
 
+1. Interaction with context. Does the memory manager plugin need to know about
+   about the context, or just use the current context?
+   - Should each context have its own memory manager?
+     - Does RMM have one manager per context?
