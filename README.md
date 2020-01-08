@@ -492,6 +492,11 @@ for more details of this implementation.
 
 ### Proposed changes
 
+This section outlines the major changes that will be made to support the EMM
+Plugin interface - there will be various small changes to other parts of Numba
+that will be required in order to adapt to these changes; an exhaustive list of
+these is not provided.
+
 A new module, `numba.cuda.cudadrv.memory` will be created for holding the
 majority of Numba memory management code, both internal and for EMM plugins.
 Several items from the `numba.cuda.cudadrv.driver` module will be moved over:
@@ -533,17 +538,36 @@ manager, e.g.:
         self._memory_manager.reset()
 ```
 
+The `memunpin` method has never been implemented (it presently raises a
+`NotImplementedError`) and is arguably un-needed - pinned memory is immediately
+unpinned by its finalizer, and unpinning before a finalizer runs would
+invalidate the state of `PinnedMemory` objects for which references are still
+held. It is proposed that this is removed when making the other changes to the
+`Context` class.
+
+The `driver` module will import `PendingDeallocs` from `memory`, and will
+instantiate `self.allocations` and `self.deallocations` as before - these will
+still be used by the context to manage the allocations and deallocations of
+objects not handled by the memory manager plugin interface - events, streams,
+and modules.
+
 #### New components of the `memory` module
 
 - `BaseCUDAMemoryManager`: An abstract class, as defined in the plugin interface
   above.
 - `HostOnlyCUDAMemoryManager`: A subclass of `BaseCUDAMemoryManager`, with the
-  logic from `Context.memhostalloc` and `Context.mempin` moved into it.
+  logic from `Context.memhostalloc` and `Context.mempin` moved into it. This
+  class will also create its own `allocations` and `deallocations` members,
+  similarly to how the `Context` class creates them. These are used to manage
+  the allocations and deallocations of pinned and mapped host memory.
 - `NumbaCUDAMemoryManager`: A subclass of `HostOnlyCUDAMemoryManager`, which
   also contains the implementation of the `memalloc` from `Context`. This is the
   default memory manager, and its use preserves the behaviour of Numba prior to
   the addition of the EMM Plugin interface - that is, all memory allocation and
   deallocation for Numba arrays is handled within Numba.
+  - This class shares the `allocations` and `deallocations` members with its
+    parent class `HostOnlyCUDAMemoryManager`, which is also uses for the
+    management of device memory that it allocates.
 - Classes for various pointers / allocations:
   -`MemoryPointer`,
   - `OwnedPointer`,
