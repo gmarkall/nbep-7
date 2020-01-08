@@ -402,6 +402,7 @@ class RMMNumbaManager(HostOnlyCUDAMemoryManager):
     def defer_cleanup(self):
         # Does nothing to defer cleanup - a full implementation may choose to
         implement a different policy.
+        # FIXME: Needs to get the context manager from the superclass
         yield
 
 
@@ -538,6 +539,10 @@ manager, e.g.:
         self._memory_manager.reset()
 ```
 
+The `_memory_manager` member is initialised when the context is prepared for
+first use, by constrcuting the class that is currently set as the memory manager
+(see `set_memory_manager` in the next section).
+
 The `memunpin` method has never been implemented (it presently raises a
 `NotImplementedError`) and is arguably un-needed - pinned memory is immediately
 unpinned by its finalizer, and unpinning before a finalizer runs would
@@ -550,6 +555,7 @@ instantiate `self.allocations` and `self.deallocations` as before - these will
 still be used by the context to manage the allocations and deallocations of
 objects not handled by the memory manager plugin interface - events, streams,
 and modules.
+
 
 #### New components of the `memory` module
 
@@ -578,6 +584,13 @@ and modules.
 - `_PendingDeallocs` will also be moved here, but renamed `PendingDeallocs` as
   it will be used from `numba.cuda.cudadrv.driver`. However, it is not part of
   the EMM plugin interface.
+- The `set_memory_manager` function, which sets a global pointing to the memory
+  manager class. This global is initially the `NumbaCUDAMemoryManager` (the
+  default). If this method is called, then it checks that:
+  - No CUDA operations have already taken place.
+  - That the memory manager has not previously been set.
+  If these conditions are met, then it sets the memory manager to be the class
+  it was passed.
 
 
 #### Staged IPC
