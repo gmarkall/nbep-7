@@ -81,8 +81,8 @@ context manager.
 ### Management of other objects
 
 In addition to memory, Numba manages the allocation and deallocation of
-[events](http://numba.pydata.org/numba-doc/latest/cuda-reference/host.html#numba.cuda.event)
-[streams](http://numba.pydata.org/numba-doc/latest/cuda-reference/host.html#numba.cuda.stream)
+[events](http://numba.pydata.org/numba-doc/latest/cuda-reference/host.html#numba.cuda.event),
+[streams](http://numba.pydata.org/numba-doc/latest/cuda-reference/host.html#numba.cuda.stream),
 and modules (a module is a compiled object, which is generated from
 `@cuda.jit`-ted functions). The management of streams, events, and modules
 should be unchanged by the presence or absence of an EMM.
