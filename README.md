@@ -450,7 +450,7 @@ class RMMNumbaManager(HostOnlyCUDAMemoryManager):
     @contextmanager
     def defer_cleanup(self):
         # Does nothing to defer cleanup - a full implementation may choose to
-        implement a different policy.
+        # implement a different policy.
         with super().defer_cleanup():
             yield
 
