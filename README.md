@@ -574,12 +574,17 @@ A new module, `numba.cuda.cudadrv.memory` will be created for holding the
 majority of Numba memory management code, both internal and for EMM plugins.
 Several items from the `numba.cuda.cudadrv.driver` module will be moved over:
 
-Classes:
-
 - `_SizeNotSet`: Needed by `_PendingDeallocs`.
-- `_PendingDeallocs`: Used by internal memory management, to be renames
+- `_PendingDeallocs`: Used by internal memory management, to be renamed
   `PendingDeallocs`, as it will no longer be private to the module, but used by
   the `cuda.cudadrv.driver` module as well.
+- Classes for various pointers / allocations:
+  -`MemoryPointer`,
+  - `OwnedPointer`,
+  - `AutoFreePointer`,
+  - `MappedMemory`,
+  - `PinnedMemory`,
+  - `MappedOwnedPointer`
 
 
 #### Context changes
@@ -643,29 +648,20 @@ events, streams, and modules, which are not handled by the EMM plugin.
   similarly to how the `Context` class creates them. These are used to manage
   the allocations and deallocations of pinned and mapped host memory.
 - `NumbaCUDAMemoryManager`: A subclass of `HostOnlyCUDAMemoryManager`, which
-  also contains the implementation of the `memalloc` from `Context`. This is the
-  default memory manager, and its use preserves the behaviour of Numba prior to
-  the addition of the EMM Plugin interface - that is, all memory allocation and
-  deallocation for Numba arrays is handled within Numba.
+  also contains an implementation of `memalloc` based on that presently existing
+  in the `Context` class. This is the default memory manager, and its use
+  preserves the behaviour of Numba prior to the addition of the EMM plugin
+  interface - that is, all memory allocation and deallocation for Numba arrays
+  is handled within Numba.
   - This class shares the `allocations` and `deallocations` members with its
-    parent class `HostOnlyCUDAMemoryManager`, which is also uses for the
+    parent class `HostOnlyCUDAMemoryManager`, and it uses these for the
     management of device memory that it allocates.
-- Classes for various pointers / allocations:
-  -`MemoryPointer`,
-  - `OwnedPointer`,
-  - `AutoFreePointer`,
-  - `MappedMemory`,
-  - `PinnedMemory`,
-  - `MappedOwnedPointer`
-- `_PendingDeallocs` will also be moved here, but renamed `PendingDeallocs` as
-  it will be used from `numba.cuda.cudadrv.driver`. However, it is not part of
-  the EMM plugin interface.
 - The `set_memory_manager` function, which sets a global pointing to the memory
-  manager class. This global is initially the `NumbaCUDAMemoryManager` (the
+  manager class. This global initially holds `NumbaCUDAMemoryManager` (the
   default). If this method is called, then it checks that:
   - No CUDA operations have already taken place.
   - That the memory manager has not previously been set.
-  If these conditions are met, then it sets the memory manager to be the class
+  If these conditions are met, then it sets the memory manager as the class
   it was passed.
 
 
