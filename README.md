@@ -1,11 +1,17 @@
 # Numba Enhancement Proposal (NBEP) 7: External Memory Management Plugins
 
+Author: Graham Markall
+Date: 09-Jan-2020
+Version: 0.1
+
 ## Document status
 
-This is a *pre-draft* - many sections are incomplete / work-in-progress and all
-subject to change significantly in the near future. A large proportion of this
-document simply consists of notes that may need significant revision or moving
-out entirely.
+This is an initial draft, provided for review and feedback by those in the
+community with an interest. It is possible that significant revisions will be
+made in order to evolve the proposal towards a complete and finished state.
+
+For more information about the status and process see the [Next steps and
+status](#next-steps-and-status) section.
 
 
 ## Background and goals
@@ -811,14 +817,14 @@ include:
   - What about CuPy's pool allocator?
 
 
-## Next steps
+## Next steps and status
 
 It is expected that an implementation that can be proposed for merging into
 Numba will emerge from the following steps:
 
-1. Share with those in the community with an interest / stake for feedback
-   and comments. It is expected for the design to evolve as a result of this
-   feedback, such that the design provides a usable and powerful interface
+1. Share with those in the community with an interest / stake in the topic for
+   feedback and comments. It is expected for the design to evolve as a result of
+   this feedback, such that the design provides a usable and powerful interface
    for all those with an interest in it.
 2. Discuss the design and proposed changes at a high-level with Numba core
    developers, to ensure that the design and structural changes will be
@@ -830,4 +836,5 @@ Numba will emerge from the following steps:
 4. Ensure the code of this implementation is high quality with appropriate
    testing, documentation, and examples.
 
-Currently, the state of this proposal is prior to Step 1.
+Currently, this proposal is at step 1 - it is being circulated for feedback and
+will be iteratively revised accordingly.
