@@ -249,8 +249,8 @@ is used from user code.
 #### Device Memory
 
 The `MemoryPointer` class is used to represent a pointer to memory. Whilst there
-are various details to the implementation the only aspect necessary to consider
-for EMM development is its initialization. The `__init__` method has the
+are various details of its implementation, the only aspect relevant to EMM
+plugin development is its initialization. The `__init__` method has the
 following interface:
 
 ```python
@@ -259,8 +259,8 @@ class MemoryPointer:
 ```
 
 - `context`: The context in which the pointer was allocated.
-- `pointer`: A `ctypes` pointer type (e.g. `ctypes.c_uint64`) holding the
-  address of the memory.
+- `pointer`: A `ctypes` pointer (e.g. `ctypes.c_uint64`) holding the address of
+  the memory.
 - `size`: The size of the allocation in bytes.
 - `finalizer`: A method that is called when the last reference to the
   `MemoryPointer` object is released. Usually this will make a call to the
@@ -274,8 +274,9 @@ class MemoryPointer:
 
 #### Host Memory
 
-Memory mapped into the CUDA address space, which is created when `mapped=True` for the
-`memhostalloc` or `mempin` methods, is managed using the `MappedMemory` class:
+Memory mapped into the CUDA address space (which is created when the
+`memhostalloc` or `mempin` methods are called with `mapped=True`) is managed
+using the `MappedMemory` class:
 
 ```python
 class MappedMemory(AutoFreePointer):
@@ -285,19 +286,19 @@ class MappedMemory(AutoFreePointer):
 - `context`: The context in which the pointer was allocated.
 - `owner`: A Python object that owns the memory, e.g. a `DeviceNDArray`
   instance.
-- `pointer`: A `ctypes` pointer type (e.g. `ctypes.c_void_p`) holding the
-  address of the allocated memory.
+- `pointer`: A `ctypes` pointer (e.g. `ctypes.c_void_p`) holding the address of
+  the allocated memory.
 - `size`: The size of the allocated memory in bytes.
 - `finalizer`: A method that is called when the last reference to the
-  `MappedMemory` object is released. This method could e.g. call `cuMemFreeHost`
-  on the pointer to deallocate the memory when it is no longer needed.
+  `MappedMemory` object is released. For example, this method could call
+  `cuMemFreeHost` on the pointer to deallocate the memory immediately.
 
 Note that the inheritance from `AutoFreePointer` is an implementation detail and
 need not concern the developer of an EMM plugin - `MemoryPointer` is higher in
 the MRO of `MappedMemory`.
 
-Memory in the host address space only, that is pinned, is represented with the
-`PinnedMemory` class
+Memory that is only in the host address space and has been pinned is represented
+with the `PinnedMemory` class:
 
 ```python
 class PinnedMemory(mviewbuf.MemAlloc):
@@ -307,21 +308,21 @@ class PinnedMemory(mviewbuf.MemAlloc):
 - `context`: The context in which the pointer was allocated.
 - `owner`: A Python object that owns the memory, e.g. a `DeviceNDArray`
   instance.
-- `pointer`: A `ctypes` pointer type (e.g. `ctypes.c_void_p`) holding the
-  address of the pinned memory.
+- `pointer`: A `ctypes` pointer (e.g. `ctypes.c_void_p`) holding the address of
+  the pinned memory.
 - `size`: The size of the pinned region in bytes.
 - `finalizer`: A method that is called when the last reference to the
   `PinnedMemory` object is released. This method could e.g. call
-  `cuMemHostUnregister` on the pointer to unpin the memory when the pinning is
-  no longer required.
+  `cuMemHostUnregister` on the pointer to unpin the memory immediately.
 
 
 ### Providing device memory management only
 
-Some external memory managers will support management of on-device memory only.
-In order to implement an external memory manager using these easily, Numba will
-provide a memory manager class with implementations of the `memhostalloc` and
-`mempin` methods. An abridged definition of this class follows:
+Some external memory managers will support management of on-device memory but
+not host memory. To make it easy to implement an EMM plugin using one of these
+managers, Numba will provide a memory manager class with implementations of the
+`memhostalloc` and `mempin` methods. An abridged definition of this class
+follows:
 
 ```python
 class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
