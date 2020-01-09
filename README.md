@@ -620,18 +620,17 @@ The `_memory_manager` member is initialised when the context is prepared for
 first use - `memory_manager` is a global which holds the class of the memory
 manager to be used.
 
-The `memunpin` method has never been implemented (it presently raises a
-`NotImplementedError`) and is arguably un-needed - pinned memory is immediately
-unpinned by its finalizer, and unpinning before a finalizer runs would
-invalidate the state of `PinnedMemory` objects for which references are still
-held. It is proposed that this is removed when making the other changes to the
-`Context` class.
+The `memunpin` method (not shown above but currently exists in the `Context`
+class) has never been implemented - it presently raises a `NotImplementedError`.
+This method arguably un-needed - pinned memory is immediately unpinned by its
+finalizer, and unpinning before a finalizer runs would invalidate the state of
+`PinnedMemory` objects for which references are still held. It is proposed that
+this is removed when making the other changes to the `Context` class.
 
 The `driver` module will import `PendingDeallocs` from `memory`, and will
 instantiate `self.allocations` and `self.deallocations` as before - these will
 still be used by the context to manage the allocations and deallocations of
-objects not handled by the memory manager plugin interface - events, streams,
-and modules.
+events, streams, and modules, which are not handled by the EMM plugin.
 
 
 #### New components of the `memory` module
