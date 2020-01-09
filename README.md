@@ -12,8 +12,8 @@ out entirely.
 
 The [CUDA Array
 interface](https://numba.pydata.org/numba-doc/latest/cuda/cuda_array_interface.html)
-enables sharing of data between different Python libraries that provide access
-to the GPU. However, each library manages its own memory distinctly from the
+enables sharing of data between different Python libraries that access CUDA
+devices. However, each library manages its own memory distinctly from the
 others. For example:
 
 - [Numba](https://numba.pydata.org/) internally manages memory for the creation
@@ -25,11 +25,11 @@ others. For example:
   implementation](https://docs-cupy.chainer.org/en/stable/reference/memory.html)
   for both device and pinned memory.
 
-The goal of this NBEP is to enable Numba's internal memory management to be
-replaced by the user with a plugin interface, so that Numba requests all
-allocations from an external memory manager. When the plugin interface is in
-use, Numba no longer directly allocates or frees memory when creating arrays,
-but instead requests allocations and frees through the external manager.
+The goal of this NBEP is to describe a plugin interface that enables Numba's
+internal memory management to be replaced with an external memory manager by the
+user. When the plugin interface is in use, Numba no longer directly allocates or
+frees any memory when creating arrays, but instead requests allocations and
+frees through the external manager.
 
 
 ## Requirements
@@ -43,47 +43,49 @@ Provide an *External Memory Manager (EMM)* interface in Numba.
   release).
 
 If an EMM is to be used, it will entirely replace Numba's internal memory
-management for the entire execution - an interface for setting the memory
-manager will be provided.
+management for the duration of program execution. An interface for setting the
+memory manager will be provided.
 
 ### Device v.s. Host memory
 
 An EMM will always take responsibility for the management of device memory.
 However, not all CUDA memory management libraries also support managing host
-memory, so an option should be provided for Numba to continue the management of
-host memory, whilst ceding control of device memory to the EMM.
+memory, so a facility for Numba to continue the management of host memory 
+whilst ceding control of device memory to the EMM will be provided.
+
 
 ### Deallocation strategies
 
 Numba's internal memory management uses a [deallocation
-strategy](https://numba.pydata.org/numba-doc/latest/cuda/memory.html#deallocation-behavior) designed to
-increase efficiency by deferring deallocations until a significant quantity are
-pending. It also provides a mechanism for preventing deallocations entirely for
-a critical section, using the
+strategy](https://numba.pydata.org/numba-doc/latest/cuda/memory.html#deallocation-behavior)
+designed to increase efficiency by deferring deallocations until a significant
+quantity are pending. It also provides a mechanism for preventing deallocations
+entirely during critical sections, using the
 [`defer_cleanup`](https://numba.pydata.org/numba-doc/latest/cuda/memory.html#numba.cuda.defer_cleanup)
 context manager.
 
 - When the EMM is not in use, the deallocation strategy and operation of
-  `defer_cleanup` remain the same.
+  `defer_cleanup` remain unchanged.
 - When the EMM is in use, the deallocation strategy is implemented by the EMM,
   and Numba's internal deallocation mechanism is not used. For example:
-  - A similar strategy could be implemented by the EMM, or
+  - A similar strategy to Numba's could be implemented by the EMM, or
   - Deallocated memory might immediately be returned to a memory pool.
 - The `defer_cleanup` context manager may behave differently with an EMM - an
   EMM should be accompanied by documentation of the behaviour of the
   `defer_cleanup` context manager when it is in use.
-  - For example, a pool allocator may always immediately return memory to a
-    pool immediately even when the context manager is in use, but may choose not
-    to free empty pools until `defer_cleanup` is not in use.
+  - For example, a pool allocator could always immediately return memory to a
+    pool immediately even when the context manager is in use, but could choose
+    not to free empty pools until `defer_cleanup` is not in use.
 
 
 ### Management of other objects
 
 In addition to memory, Numba manages the allocation and deallocation of
-[streams](http://numba.pydata.org/numba-doc/latest/cuda-reference/host.html?highlight=stream#numba.cuda.stream)
+[events](http://numba.pydata.org/numba-doc/latest/cuda-reference/host.html#numba.cuda.event)
+[streams](http://numba.pydata.org/numba-doc/latest/cuda-reference/host.html#numba.cuda.stream)
 and modules (a module is a compiled object, which is generated from
-`@cuda.jit`-ted functions). The management of streams and modules should be
-unchanged by the presence or absence of an EMM.
+`@cuda.jit`-ted functions). The management of streams, events, and modules
+should be unchanged by the presence or absence of an EMM.
 
 ### Non-requirements
 
