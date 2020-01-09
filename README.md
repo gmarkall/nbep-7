@@ -579,7 +579,7 @@ Several items from the `numba.cuda.cudadrv.driver` module will be moved over:
   `PendingDeallocs`, as it will no longer be private to the module, but used by
   the `cuda.cudadrv.driver` module as well.
 - Classes for various pointers / allocations:
-  -`MemoryPointer`,
+  - `MemoryPointer`,
   - `OwnedPointer`,
   - `AutoFreePointer`,
   - `MappedMemory`,
@@ -667,7 +667,13 @@ events, streams, and modules, which are not handled by the EMM plugin.
 
 #### Staged IPC
 
-Staged IPC should not own the memory it allocates:
+Staged IPC should not take ownership of the memory that it allocates. When the
+default internal memory manager is in use, the memory allocated for the staging
+array is already owned. When an EMM plugin is in use, it is not legitimate to
+take ownership of the memory.
+
+This change can be made by applying the following small patch, which has been
+tested to have no effect on the CUDA test suite:
 
 ```
 diff --git a/numba/cuda/cudadrv/driver.py b/numba/cuda/cudadrv/driver.py
@@ -679,10 +685,6 @@ index 7832955..f2c1352 100644
              impl.close()
 
 -        return newmem.own()
-+        # This used to be newmem.own() but the own() was removed - when the
-+        # Numba CUDA memory manager is used, the pointer is already owned -
-+        # when another memory manager is used, it is incorrect to take
-+        # ownership of the pointer.
 +        return newmem
 ```
 
