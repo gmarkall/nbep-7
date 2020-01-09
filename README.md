@@ -476,6 +476,7 @@ def use_rmm_for_numba():
     cuda.cudadrv.driver.set_memory_manager(RMMNumbaManager)
 ```
 
+
 ### Example usage
 
 A simple example that configures Numba to use RMM for memory management and
@@ -518,13 +519,19 @@ the Python interpreter is invoked to run the example as:
 NUMBA_CUDA_MEMORY_MANAGER="rmm.RMMNumbaManager" python example.py
 ```
 
+
 ## Numba internal changes
+
+This section is intended primarily for Numba developers - those with an interest
+in the external interface for implementing EMM plugins may choose to skip over
+this section.
+
 
 ### Current model / implementation
 
-At present, memory management is in the `numba.cuda.cudadrv.driver` module.
-Methods of the putative `BaseCUDAMemoryManager` class above (`memalloc`, etc.)
-are methods of the `Context` class.
+At present, memory management is implemented in the `numba.cuda.cudadrv.driver`
+module.  Methods of the putative `BaseCUDAMemoryManager` class above
+(`memalloc`, etc.) exist as methods of the `Context` class.
 
 The `Context` class maintains lists of allocations and deallocations:
 
@@ -541,16 +548,18 @@ These are used to track allocations and deallocations of:
 - Events
 - Modules
 
-The `_PendingDeallocs` class is used to implement the deferred deallocation
-strategy - finalizers for the items listed above add to its list of pending
-deallocations; these finalizers are run when the objects owning them are
-garbage-collected by the Python interpreter. When a new deallocation causes the
-number or size of pending deallocations to exceed a configured ratio, the
-`_PendingDeallocs` object runs deallocators for all items it knows about and
-then clears its internal pending list.
+The `_PendingDeallocs` class implements the deferred deallocation strategy -
+cleanup functions (such as `cuMemFree`) for the items above are added to its
+list of pending deallocations by the finalizers of objects representing
+allocations. These finalizers are run when the objects owning them are
+garbage-collected by the Python interpreter. When the addition of a a new
+cleanup function to the deallocation list causes the number or size of pending
+deallocations to exceed a configured ratio, the `_PendingDeallocs` object runs
+deallocators for all items it knows about and then clears its internal pending
+list.
 
 See [Deallocation Behaviour
-documentation]((https://numba.pydata.org/numba-doc/latest/cuda/memory.html#deallocation-behavior)
+documentation](https://numba.pydata.org/numba-doc/latest/cuda/memory.html#deallocation-behavior)
 for more details of this implementation.
 
 
