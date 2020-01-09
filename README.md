@@ -118,6 +118,19 @@ this module to external memory management are:
 - `set_memory_manager`: a method for registering an external memory manager with
   Numba.
 
+As an alternative to calling the `set_memory_manager` functions, an environment
+variable will also be supported for setting the memory manager. The value of the
+environment variable should be set to the name of the memory manager plugin class,
+i.e.:
+
+```
+export NUMBA_CUDA_MEMORY_MANAGER="<class>"
+```
+
+When this variable is set, Numba will automatically use the specified memory
+manager class. Calls to `set_memory_manager` will issue a warning, but otherwise
+be ignored.
+
 
 ### Plugin Base Classes
 
