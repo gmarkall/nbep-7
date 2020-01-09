@@ -806,24 +806,37 @@ Numba memory management. There are an additional 6 skipped tests, from:
   when an EMM Plugin is used, but ownership is assumed by this test case.
 
 
-## Notes
+## Unresolved items
 
-Mainly about implementation details / changes.
+So far this proposal is not based on a well-defined notion of how the plugin
+interface interacts with the context. Some questions that would require answers
+in order to specify the relationship between contexts and memory management
+include:
+
+- Does the memory manager plugin need to given a context as a parameter to its
+  methods? Or, is just using the current context appropriate?
+- Should each context have its own instance of the memory manager?
+  - For inspiration: does RMM manage memory for one context or all contexts?
+  - What about CuPy's pool allocator?
 
 
-### Devicearray
+## Next steps
 
-Device array creates memory pointer from driver. Should be abstracted into
-method to get a pointer instead of constructing directly? e.g. at the moment:
+It is expected that an implementation that can be proposed for merging into
+Numba will emerge from the following steps:
 
-```python
-gpu_data = _memory.MemoryPointer(context=devices.get_context(),
-                                 pointer=c_void_p(0), size=0)
-```
+1. Share with those in the community with an interest / stake for feedback
+   and comments. It is expected for the design to evolve as a result of this
+   feedback, such that the design provides a usable and powerful interface
+   for all those with an interest in it.
+2. Discuss the design and proposed changes at a high-level with Numba core
+   developers, to ensure that the design and structural changes will be
+   considered acceptable, and to improve the design where possible based on
+   feedback.
+3. Evolve the prototype referenced above to create an implementation that
+   matches the design in this document and provide implementations of plugins 
+   from external libraries (e.g. RMM, CuPy).
+4. Ensure the code of this implementation is high quality with appropriate
+   testing, documentation, and examples.
 
-## To think about / expand on
-
-1. Interaction with context. Does the memory manager plugin need to know about
-   about the context, or just use the current context?
-   - Should each context have its own memory manager?
-     - Does RMM have one manager per context?
+Currently, the state of this proposal is prior to Step 1.
