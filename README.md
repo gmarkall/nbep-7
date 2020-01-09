@@ -713,7 +713,7 @@ various aspects of the design. In particular, the implementation:
 - Provides enough change to support an EMM plugin using RMM
   - and potentially other EMM plugins such as for CuPy, but these are as-yet
     unimplemented.
-- does not provide such clean boundaries as outlined in this document
+- does not provide such clean interface boundaries as outlined in this document.
 
 It is expected that as the design and document evolve towards completion, the
 prototype implementations will be modified to more closely align with the
@@ -730,7 +730,7 @@ The current implementations can be found in:
 ### Current implementation status
 
 For a minimal example, a simple allocation and free using RMM works as expected.
-For the example code:
+For the example code (similar to the RMM example above):
 
 ```python
 import rmm
@@ -754,14 +754,14 @@ Alloc,0,0x7fae06600000,0,80,0,0,1,1.10549,1.1074,0.00191666,/home/nfs/gmarkall/n
 Free,0,0x7fae06600000,0,0,0,0,0,1.10798,1.10921,0.00122238,/home/nfs/gmarkall/numbadev/numba/numba/utils.py:678
 ```
 
-This provides a small example - however, the whole Numba test suite also passes
-using an EMM Plugin.
+This provdes some validation of the example use case given above.
 
 
 ### Numba CUDA Unit tests
 
-All relevant unit tests pass with the prototype branch. The unit test suite can
-be run with the RMM EMM Plugin with:
+As well as providing correct execution of a simple example, all relevant Numba
+CUDA unit tests also pass with the prototype branch. The unit test suite can be
+run with the RMM EMM Plugin with:
 
 ```
 NUMBA_CUDA_MEMORY_MANAGER=RMM python -m numba.runtests numba.cuda.tests
