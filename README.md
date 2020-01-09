@@ -198,9 +198,12 @@ class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def get_ipc_handle(self, memory, stream):
+    def get_ipc_handle(self, memory, stream=0):
         """
-        Return an `IpcHandle` from a GPU allocation
+        Return an `IpcHandle` from a GPU allocation. Arguments:
+	
+	- `memory`: A `MemoryPointer` for which the IPC handle should be created.
+	- `stream`: An optional stream to use for the creation of the handle.
         """
 
     @abstractmethod
@@ -222,6 +225,19 @@ being requested. This gives the EMM an opportunity to initialize any data
 structures etc. that it needs for its normal operations. The method may be
 called multiple times during the lifetime of the program - subsequent calls
 should not invalidate or reset the state of the EMM.
+
+The `memalloc`, `memhostalloc`, and `mempin` methods are called when Numba
+requires an allocation of device or host memory, or pinning of host memory.
+
+`get_ipc_handle` is called when an IPC handle for an array is required.
+
+`get_memory_info` may be called at any time after `prepare_for_use`.
+
+`reset` is called as part of resetting a context. Numba does not normally call
+reset spontaneously, but it may be called at the behest of the user.
+
+`defer_cleanup` is called when the `numba.cuda.defer_cleanup` context manager
+is used from user code.
 
 
 ### Representing pointers
