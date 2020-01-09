@@ -566,7 +566,7 @@ for more details of this implementation.
 ### Proposed changes
 
 This section outlines the major changes that will be made to support the EMM
-Plugin interface - there will be various small changes to other parts of Numba
+plugin interface - there will be various small changes to other parts of Numba
 that will be required in order to adapt to these changes; an exhaustive list of
 these is not provided.
 
@@ -577,14 +577,17 @@ Several items from the `numba.cuda.cudadrv.driver` module will be moved over:
 Classes:
 
 - `_SizeNotSet`: Needed by `_PendingDeallocs`.
-- `_PendingDeallocs`: Used by internal memory management.
+- `_PendingDeallocs`: Used by internal memory management, to be renames
+  `PendingDeallocs`, as it will no longer be private to the module, but used by
+  the `cuda.cudadrv.driver` module as well.
+
 
 #### Context changes
 
 The `numba.cuda.cudadrv.driver.Context` class will no longer directly allocate
-and free memory. Instead, the context will hold a reference to the memory
-manager in use, and its memory allocation methods will call into the memory
-manager, e.g.:
+and free memory. Instead, the context will hold a reference a memory manager
+instance, and its memory allocation methods will call into the memory manager,
+e.g.:
 
 ```python
     def memalloc(self, bytesize):
@@ -596,8 +599,10 @@ manager, e.g.:
     def mempin(self, owner, pointer, size, mapped=False):
         if mapped and not self.device.CAN_MAP_HOST_MEMORY:
             raise CudaDriverError("%s cannot map host memory" % self.device)
+        return self._memory_manager.mempin(owner, pointer, size, mapped)
 
     def prepare_for_use(self):
+        self._memory_manager = memory_manager()
         self._memory_manager.prepare_for_use()
 
     def get_memory_info(self):
@@ -612,8 +617,8 @@ manager, e.g.:
 ```
 
 The `_memory_manager` member is initialised when the context is prepared for
-first use, by constrcuting the class that is currently set as the memory manager
-(see `set_memory_manager` in the next section).
+first use - `memory_manager` is a global which holds the class of the memory
+manager to be used.
 
 The `memunpin` method has never been implemented (it presently raises a
 `NotImplementedError`) and is arguably un-needed - pinned memory is immediately
