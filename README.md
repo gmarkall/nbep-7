@@ -675,7 +675,7 @@ take ownership of the memory.
 This change can be made by applying the following small patch, which has been
 tested to have no effect on the CUDA test suite:
 
-```
+```diff
 diff --git a/numba/cuda/cudadrv/driver.py b/numba/cuda/cudadrv/driver.py
 index 7832955..f2c1352 100644
 --- a/numba/cuda/cudadrv/driver.py
@@ -705,14 +705,15 @@ substantial. These include:
 
 ## Prototyping / experimental implementation
 
-Some prototyping and experimental implementations have been produced to guide
-the designs presented in this document. The implementations presently do not
-fully align with the design outlined here, but were used for proving the
-concept for various aspects of the design. In particular the interface does not
-provide such clean boundaries as outlined in the above design, but instead
-provides a little more than the minumum required to implement external memory
-management plugins using RMM (and potentially others, e.g, CuPy, but these are
-as-yet unimplemented.
+Some prototype / experimental implementations have been produced to guide the
+designs presented in this document. The implementations presently do not fully
+align with the design outlined here, but were used for proving concepts for
+various aspects of the design. In particular, the implementation:
+
+- Provides enough change to support an EMM plugin using RMM
+  - and potentially other EMM plugins such as for CuPy, but these are as-yet
+    unimplemented.
+- does not provide such clean boundaries as outlined in this document
 
 It is expected that as the design and document evolve towards completion, the
 prototype implementations will be modified to more closely align with the
