@@ -1,8 +1,11 @@
 # Numba Enhancement Proposal (NBEP) 7: External Memory Management Plugins
 
-Author: Graham Markall
-Date: 09-Jan-2020
-Version: 0.1
+**Author:** Graham Markall, NVIDIA <gmarkall@nvidia.com>
+
+**Date:** 09-Jan-2020
+
+**Version:** 0.1
+
 
 ## Document status
 
