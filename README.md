@@ -355,13 +355,15 @@ from contextlib import context_manager
 from numba.cuda.cudadrv.memory import HostOnlyCUDAMemoryManager, MemoryPointer
 
 
-# New class:
+# New class implementing the EMM Plugin:
 class RMMNumbaManager(HostOnlyCUDAMemoryManager):
     def __init__(self, logging=False):
         self._initialized = False
         self._logging = logging
 
     def memalloc(self, bytesize, stream=0):
+        # Allocates device memory using RMM functions. The finalizer for the
+	# allocated memory calls back to RMM to free the memory.
         addr = librmm.rmm_alloc(bytesize, stream)
         ctx = cuda.current_context()
         ptr = ctypes.c_uint64(int(addr))
@@ -373,9 +375,14 @@ class RMMNumbaManager(HostOnlyCUDAMemoryManager):
 	Get an IPC handle for the memory with offset modified by the RMM memory
         pool.
         """
-        # Not a very clean implementation - may want to implement something at
-        # the C++ layer for this, and also not rely on borrowing bits of Numba
-        # internals to initialise ipchandle.
+	# This implementation provides a functional implementation and illustrates
+	# what get_ipc_handle needs to do, but it is not a very "clean"
+	# implementation, and it relies on borrowing bits of Numba internals to
+	# initialise ipchandle. 
+	#
+	# A more polished implementation might make use of additional functions in
+	# the RMM C++ layer for initialising IPC handles, and not use any Numba
+	# internals.
         ipchandle = (ctypes.c_byte * 64)()  # IPC handle is 64 bytes
         cuda.cudadrv.memory.driver_funcs.cuIpcGetMemHandle(
             ctypes.byref(ipchandle),
@@ -389,13 +396,19 @@ class RMMNumbaManager(HostOnlyCUDAMemoryManager):
                          offset=offset)
 
     def get_memory_info(self):
+        # Returns a tuple of (free, total) using RMM functionality.
         return get_memory_info()
 
     def prepare_for_use(self):
+        # Initialise RMM here, as it is just prior to the first use of CUDA
+	# in Numba.
         if not self._initialized:
             reinitialize(logging=self._logging)
 
     def reset(self):
+        # The user called context.reset(), which leads to here.
+	# Question: does this reset RMM for the current context, or all
+	# contexts?
         reinitialize(logging=self._logging)
 
     @contextmanager
@@ -429,7 +442,11 @@ def use_rmm_for_numba():
 
 ### Example usage
 
+A simple example that configures Numba to use RMM for memory management and
+creates a device array is as follows:
+
 ```python
+# example.py
 import rmm 
 import numpy as np
 
@@ -443,7 +460,7 @@ del(d_a)
 print(rmm.csv_log())
 ```
 
-Should result in output similar to the following:
+Running this should result in output similar to the following:
 
 ```
 Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,Total Memory,Current Allocs,Start,End,Elapsed,Location
@@ -454,6 +471,16 @@ Free,0,0x7fae06600000,0,0,0,0,0,1.10798,1.10921,0.00122238,/home/nfs/gmarkall/nu
 Note that there is some scope for improvement in RMM for detecting the line
 number at which the allocation / free occurred, but this is outside the scope of
 the example in this proposal.
+
+#### Setting the memory manager through the environment
+
+Rather than calling `rmm.use_rmm_for_numba()` in the example above, the memory
+manager could also be set to use RMM globally with an environment variable, so
+the Python interpreter is invoked to run the example as:
+
+```
+NUMBA_CUDA_MEMORY_MANAGER="rmm.RMMNumbaManager" python example.py
+```
 
 ## Numba internal changes
 
