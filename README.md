@@ -376,8 +376,8 @@ the following rules:
 ## Example implementation - A RAPIDS Memory Manager (RMM) Plugin
 
 An implementation of an EMM plugin within the [Rapids Memory Manager
-(RMM)RMM](https://github.com:rapidsai/rmm) is sketched out in this section. This
-is intended to show an overview of the implementation in order to support the
+(RMM)](https://github.com:rapidsai/rmm) is sketched out in this section. This is
+intended to show an overview of the implementation in order to support the
 descriptions above and to illustrate how the plugin interface can be used - it
 has not presently been tested to be correct or complete.
 
@@ -436,6 +436,7 @@ class RMMNumbaManager(HostOnlyCUDAMemoryManager):
     def prepare_for_use(self):
         # Initialise RMM here, as it is just prior to the first use of CUDA
 	# in Numba.
+        super().prepare_for_use()
         if not self._initialized:
             reinitialize(logging=self._logging)
 
@@ -443,14 +444,15 @@ class RMMNumbaManager(HostOnlyCUDAMemoryManager):
         # The user called context.reset(), which leads to here.
 	# Question: does this reset RMM for the current context, or all
 	# contexts?
+        super().reset()
         reinitialize(logging=self._logging)
 
     @contextmanager
     def defer_cleanup(self):
         # Does nothing to defer cleanup - a full implementation may choose to
         implement a different policy.
-        # FIXME: Needs to get the context manager from the superclass
-        yield
+        with super().defer_cleanup():
+            yield
 
 
 # The existing _make_finalizer function is used by RMMNumbaManager:
