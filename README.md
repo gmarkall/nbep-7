@@ -87,13 +87,15 @@ and modules (a module is a compiled object, which is generated from
 `@cuda.jit`-ted functions). The management of streams, events, and modules
 should be unchanged by the presence or absence of an EMM.
 
+
 ### Non-requirements
 
-In order to minimise complexity for an initial implementation, the following
-will not be supported:
+In order to minimise complexity and constrain this proposal to a reasonable
+scope, the following will not be supported:
 
-- Using different memory managers for different contexts. All contexts will use
-  the same memory manager.
+- Using different memory manager implementations for different contexts. All
+  contexts will use the same memory manager implementation - either the Numba
+  internal implementation or an external implementation.
 - Changing the memory manager once execution has begun. It is not practical to
   change the memory manager and retain all allocations. Cleaning up the entire
   state and then changing to a different memory allocator (rather than starting
@@ -107,10 +109,10 @@ will not be supported:
 ## Interface for Plugin developers
 
 A new module, `numba.cuda.cudadrv.memory` will be added. The relevant globals of
-this module to external memory management are:
+this module for developers of EMM Plugins are:
 
 - `BaseCUDAMemoryManager` and `HostOnlyCUDAMemoryManager`: base classes for
-  external memory management plugins.
+  EMM plugin implementations.
 - `MemoryPointer`: used to encapsulate information about a pointer to device
   memory.
 - `MappedMemory`: used to hold information about host memory that is mapped into
@@ -120,10 +122,9 @@ this module to external memory management are:
 - `set_memory_manager`: a method for registering an external memory manager with
   Numba.
 
-As an alternative to calling the `set_memory_manager` functions, an environment
-variable will also be supported for setting the memory manager. The value of the
-environment variable should be set to the name of the memory manager plugin class,
-i.e.:
+As an alternative to calling the `set_memory_manager` function, an environment
+variable can be used to set the memory manager. The value of the environment
+variable should be the name of the memory manager plugin class, i.e.:
 
 ```
 export NUMBA_CUDA_MEMORY_MANAGER="<class>"
@@ -136,10 +137,8 @@ be ignored.
 
 ### Plugin Base Classes
 
-An external memory management plugin is implemented by inheriting from the
-`BaseCUDAMemoryManager` class, and registering the memory manager with Numba
-prior to the execution of any CUDA operations. The `BaseCUDAMemoryManager` class
-is defined as:
+An EMM plugin is implemented by inheriting from the `BaseCUDAMemoryManager`
+class, which is defined as:
 
 ```python
 class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
@@ -211,7 +210,7 @@ class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
     @abstractmethod
     def reset(self):
         """
-        Clear up all resources in this context.
+        Clear up all memory allocated in this context.
         """
 
     @abstractmethod
@@ -222,9 +221,12 @@ class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
         """
 ```
 
+All of the methods of an EMM plugin are called from within Numba - they never
+need to be invoked directly by a Numba user.
+
 The `prepare_for_use` method is called by Numba prior to any memory allocations
 being requested. This gives the EMM an opportunity to initialize any data
-structures etc. that it needs for its normal operations. The method may be
+structures, etc., that it needs for its normal operations. The method may be
 called multiple times during the lifetime of the program - subsequent calls
 should not invalidate or reset the state of the EMM.
 
