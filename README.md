@@ -691,44 +691,16 @@ index 7832955..f2c1352 100644
 
 #### Testing
 
-Will need some test refactoring, e.g.
+Alongside the addition of appropriate tests for new functionality, there will be
+some refactoring of existing tests required, but these changes are not
+substantial. These include:
 
-```diff
---- a/numba/cuda/tests/cudadrv/test_cuda_memory.py
-+++ b/numba/cuda/tests/cudadrv/test_cuda_memory.py
-@@ -2,7 +2,7 @@ import ctypes
-
- import numpy as np
-
--from numba.cuda.cudadrv import driver, drvapi, devices
-+from numba.cuda.cudadrv import driver, drvapi, devices, memory
- from numba.cuda.testing import unittest, CUDATestCase
- from numba.utils import IS_PY3
- from numba.cuda.testing import skip_on_cudasim
-@@ -77,14 +77,14 @@ class TestCudaMemory(CUDATestCase):
-             dtor_invoked[0] += 1
-
-         # Ensure finalizer is called when pointer is deleted
--        ptr = driver.MemoryPointer(context=self.context, pointer=fake_ptr,
--                                   size=40, finalizer=dtor)
-+        ptr = memory.MemoryPointer(context=self.context, pointer=fake_ptr,
-+                                           size=40, finalizer=dtor)
-         self.assertEqual(dtor_invoked[0], 0)
-         del ptr
-         self.assertEqual(dtor_invoked[0], 1)
-
-         # Ensure removing derived pointer doesn't call finalizer
--        ptr = driver.MemoryPointer(context=self.context, pointer=fake_ptr,
-+        ptr = memory.MemoryPointer(context=self.context, pointer=fake_ptr,
-                                    size=40, finalizer=dtor)
-         owned = ptr.own()
-         del owned
-```
-
-- Enabling a different deallocation strategy to be used by plugins:
-  - Will need some test modifications - quite a few check the allocations /
-    deallocations list, which will become tests of Numba's "bundled" memory
-    manager.
+- Tests that construct `MemoryPointer` instances directly need to use it from
+  the `memory` module instead (e.g. `test_cuda_memory`).
+- Tests of the deallocation strategy (e.g. `TestDeallocation`,
+  `TestDeferCleanup`) will need to be modified to ensure that they are examining
+  the correct set of deallocations. When an EMM plugin is in use, they will need
+  to be skipped.
 
 
 ## Prototyping / experimental implementation
