@@ -83,7 +83,7 @@ context manager.
   EMM should be accompanied by documentation of the behaviour of the
   `defer_cleanup` context manager when it is in use.
   - For example, a pool allocator could always immediately return memory to a
-    pool immediately even when the context manager is in use, but could choose
+    pool even when the context manager is in use, but could choose
     not to free empty pools until `defer_cleanup` is not in use.
 
 
@@ -561,7 +561,7 @@ The `_PendingDeallocs` class implements the deferred deallocation strategy -
 cleanup functions (such as `cuMemFree`) for the items above are added to its
 list of pending deallocations by the finalizers of objects representing
 allocations. These finalizers are run when the objects owning them are
-garbage-collected by the Python interpreter. When the addition of a a new
+garbage-collected by the Python interpreter. When the addition of a new
 cleanup function to the deallocation list causes the number or size of pending
 deallocations to exceed a configured ratio, the `_PendingDeallocs` object runs
 deallocators for all items it knows about and then clears its internal pending
@@ -599,7 +599,7 @@ Several items from the `numba.cuda.cudadrv.driver` module will be moved over:
 #### Context changes
 
 The `numba.cuda.cudadrv.driver.Context` class will no longer directly allocate
-and free memory. Instead, the context will hold a reference a memory manager
+and free memory. Instead, the context will hold a reference to a memory manager
 instance, and its memory allocation methods will call into the memory manager,
 e.g.:
 
@@ -763,7 +763,7 @@ Alloc,0,0x7fae06600000,0,80,0,0,1,1.10549,1.1074,0.00191666,/home/nfs/gmarkall/n
 Free,0,0x7fae06600000,0,0,0,0,0,1.10798,1.10921,0.00122238,/home/nfs/gmarkall/numbadev/numba/numba/utils.py:678
 ```
 
-This provdes some validation of the example use case given above.
+This provides some validation of the example use case given above.
 
 
 ### Numba CUDA Unit tests
@@ -813,7 +813,7 @@ interface interacts with the context. Some questions that would require answers
 in order to specify the relationship between contexts and memory management
 include:
 
-- Does the memory manager plugin need to given a context as a parameter to its
+- Does the memory manager plugin need to give a context as a parameter to its
   methods? Or, is just using the current context appropriate?
 - Should each context have its own instance of the memory manager?
   - For inspiration: does RMM manage memory for one context or all contexts?
