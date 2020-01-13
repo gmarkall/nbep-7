@@ -215,7 +215,7 @@ class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def prepare_for_use(self):
+    def initialize(self):
         """
         Perform any initialization required for the EMM plugin to be ready to
         use.
