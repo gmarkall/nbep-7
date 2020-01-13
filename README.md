@@ -4,9 +4,9 @@
 
 **Date:** 13-Jan-2020
 
-**Version:** 0.2
+**Version:** 0.3
 
-**Contributors**: Peter Entschev
+**Contributors**: Thomson Comer, Peter Entschev, Keith Kraus
 
 
 ## Document status
@@ -97,6 +97,21 @@ In addition to memory, Numba manages the allocation and deallocation of
 and modules (a module is a compiled object, which is generated from
 `@cuda.jit`-ted functions). The management of streams, events, and modules
 should be unchanged by the presence or absence of an EMM.
+
+
+### Asynchronous allocation / deallocation
+
+An asynchronous memory manager might provide the facility for an allocation or
+free to take a CUDA stream and execute asynchronously. For freeing this is
+unlikely to cause issues since it operates at a layer beneath Python, but for
+allocations this could be problematic if the user tries to then launch a kernel
+on the default stream from this asynchronous memory allocation.
+
+The interface described in this proposal will not be required to support
+asynchronous allocation and deallocation, and as such these use cases will not
+be considered further. However, nothing in this proposal should preclude the
+straightforward addition of asynchronous operations in future versions of the
+interface.
 
 
 ### Non-requirements
@@ -233,6 +248,14 @@ class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
         Returns a context manager that ensures the implementation of deferred
         cleanup whilst it is active.
         """
+
+    @abstractmethod
+    def version(self):
+        """
+	Returns an integer specifying the version of the EMM Plugin interface
+	supported by the plugin implementation. Should always return 1 for
+	implementations described in this proposal.
+	"""
 ```
 
 All of the methods of an EMM plugin are called from within Numba - they never
@@ -262,6 +285,10 @@ reset spontaneously, but it may be called at the behest of the user.
 
 `defer_cleanup` is called when the `numba.cuda.defer_cleanup` context manager
 is used from user code.
+
+`version` is called by Numba when the memory manager is set, to ensure that the
+version of the interface implemented by the plugin is compatible with the
+version of Numba in use.
 
 
 ### Representing pointers
@@ -474,6 +501,9 @@ class RMMNumbaManager(HostOnlyCUDAMemoryManager):
         with super().defer_cleanup():
             yield
 
+    def version(self):
+        # As required by the specification
+        return 1
 
 # The existing _make_finalizer function is used by RMMNumbaManager:
 def _make_finalizer(handle, stream):
