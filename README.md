@@ -2,9 +2,11 @@
 
 **Author:** Graham Markall, NVIDIA (<gmarkall@nvidia.com>)
 
-**Date:** 09-Jan-2020
+**Date:** 13-Jan-2020
 
-**Version:** 0.1
+**Version:** 0.2
+
+**Contributors**: Peter Entschev
 
 
 ## Document status
@@ -113,6 +115,9 @@ scope, the following will not be supported:
   e.g. for acquiring / releasing memory as discussed in [Numba Issue
   #4886](https://github.com/numba/numba/issues/4886) - these are independent,
   and can be addressed as part of separate proposals.
+- Managed memory / UVM is not supported. At present Numba does not support UVM -
+  see [Numba Issue #4362](https://github.com/numba/numba/issues/4362) for
+  discussion of support.
 
 
 ## Interface for Plugin developers
@@ -242,7 +247,13 @@ should not invalidate or reset the state of the EMM.
 The `memalloc`, `memhostalloc`, and `mempin` methods are called when Numba
 requires an allocation of device or host memory, or pinning of host memory.
 
-`get_ipc_handle` is called when an IPC handle for an array is required.
+`get_ipc_handle` is called when an IPC handle for an array is required. Note
+that there is no method for closing an IPC handle - this is because the
+`IpcHandle` object constructed by `get_ipc_handle` contains a `close()` method
+as part of its definition in Numba, which closes the handle by calling
+`cuIpcCloseMemHandle`. It is expected that this is sufficient for general use
+cases, so no facility for customising the closing of IPC handles is provided by
+the EMM Plugin interface.
 
 `get_memory_info` may be called at any time after `prepare_for_use`.
 
@@ -759,11 +770,13 @@ We see the following output:
 
 ```
 Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,Total Memory,Current Allocs,Start,End,Elapsed,Location
-Alloc,0,0x7fae06600000,0,80,0,0,1,1.10549,1.1074,0.00191666,/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py:683
-Free,0,0x7fae06600000,0,0,0,0,0,1.10798,1.10921,0.00122238,/home/nfs/gmarkall/numbadev/numba/numba/utils.py:678
+Alloc,0,0x7f96c7400000,0,80,0,0,1,1.13396,1.13576,0.00180059,/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py:686
+Free,0,0x7f96c7400000,0,0,0,0,0,1.13628,1.13723,0.000956004,/home/nfs/gmarkall/numbadev/numba/numba/utils.py:678
 ```
 
-This provides some validation of the example use case given above.
+This output is similar to the expected output from the example usage presented
+above (though note that the pointer addresses and timestamps vary compared to
+the example), and provides some validation of the example use case.
 
 
 ### Numba CUDA Unit tests
@@ -817,7 +830,10 @@ include:
   methods? Or, is just using the current context appropriate?
 - Should each context have its own instance of the memory manager?
   - For inspiration: does RMM manage memory for one context or all contexts?
-  - What about CuPy's pool allocator?
+  - CuPy keeps a [`MemoryPool`
+    object](https://github.com/cupy/cupy/blob/master/cupy/cuda/memory.pyx#L1213-L1239)
+    with [one memory pool per
+    GPU](https://github.com/cupy/cupy/blob/master/cupy/cuda/memory.pyx#L1244-L1245).
 
 
 ## Next steps and status
