@@ -261,7 +261,7 @@ class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
 All of the methods of an EMM plugin are called from within Numba - they never
 need to be invoked directly by a Numba user.
 
-The `prepare_for_use` method is called by Numba prior to any memory allocations
+The `initialize` method is called by Numba prior to any memory allocations
 being requested. This gives the EMM an opportunity to initialize any data
 structures, etc., that it needs for its normal operations. The method may be
 called multiple times during the lifetime of the program - subsequent calls
@@ -278,7 +278,7 @@ as part of its definition in Numba, which closes the handle by calling
 cases, so no facility for customising the closing of IPC handles is provided by
 the EMM Plugin interface.
 
-`get_memory_info` may be called at any time after `prepare_for_use`.
+`get_memory_info` may be called at any time after `initialize`.
 
 `reset` is called as part of resetting a context. Numba does not normally call
 reset spontaneously, but it may be called at the behest of the user.
