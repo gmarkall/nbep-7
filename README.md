@@ -275,21 +275,21 @@ following interface:
 
 ```python
 class MemoryPointer:
-    def __init__(self, context, pointer, size, finalizer=None, owner=None):
+    def __init__(self, context, pointer, size, owner=None, finalizer=None):
 ```
 
 - `context`: The context in which the pointer was allocated.
 - `pointer`: A `ctypes` pointer (e.g. `ctypes.c_uint64`) holding the address of
   the memory.
 - `size`: The size of the allocation in bytes.
+- `owner`: The owner is sometimes set by the internals of the class, or used for
+  Numba's internal memory management, but need not be provided by the writer of
+  an EMM plugin - the default of `None` should always suffice.
 - `finalizer`: A method that is called when the last reference to the
   `MemoryPointer` object is released. Usually this will make a call to the
   external memory management library to inform it that the memory is no longer
   required, and that it could potentially be freed (though the EMM is not
   required to free it immediately).
-- `owner`: The owner is sometimes set by the internals of the class, or used for
-  Numba's internal memory management, but need not be provided by the writer of
-  an EMM plugin - the default of `None` should always suffice.
 
 
 #### Host Memory
@@ -300,15 +300,15 @@ using the `MappedMemory` class:
 
 ```python
 class MappedMemory(AutoFreePointer):
-    def __init__(self, context, owner, pointer, size, finalizer=None):
+    def __init__(self, context, pointer, size, owner, finalizer=None):
 ```
 
 - `context`: The context in which the pointer was allocated.
-- `owner`: A Python object that owns the memory, e.g. a `DeviceNDArray`
-  instance.
 - `pointer`: A `ctypes` pointer (e.g. `ctypes.c_void_p`) holding the address of
   the allocated memory.
 - `size`: The size of the allocated memory in bytes.
+- `owner`: A Python object that owns the memory, e.g. a `DeviceNDArray`
+  instance.
 - `finalizer`: A method that is called when the last reference to the
   `MappedMemory` object is released. For example, this method could call
   `cuMemFreeHost` on the pointer to deallocate the memory immediately.
@@ -322,15 +322,15 @@ with the `PinnedMemory` class:
 
 ```python
 class PinnedMemory(mviewbuf.MemAlloc):
-    def __init__(self, context, owner, pointer, size, finalizer=None):
+    def __init__(self, context, pointer, size, owner, finalizer=None):
 ```
 
 - `context`: The context in which the pointer was allocated.
-- `owner`: A Python object that owns the memory, e.g. a `DeviceNDArray`
-  instance.
 - `pointer`: A `ctypes` pointer (e.g. `ctypes.c_void_p`) holding the address of
   the pinned memory.
 - `size`: The size of the pinned region in bytes.
+- `owner`: A Python object that owns the memory, e.g. a `DeviceNDArray`
+  instance.
 - `finalizer`: A method that is called when the last reference to the
   `PinnedMemory` object is released. This method could e.g. call
   `cuMemHostUnregister` on the pointer to unpin the memory immediately.
