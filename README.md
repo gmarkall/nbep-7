@@ -264,7 +264,7 @@ following interface:
 
 ```python
 class MemoryPointer:
-    def __init__(self, context, pointer, size, finalizer=None, owner=None):
+    def __init__(self, context, pointer, size, owner=None, finalizer=None):
 ```
 
 - `context`: The context in which the pointer was allocated.
@@ -289,7 +289,7 @@ using the `MappedMemory` class:
 
 ```python
 class MappedMemory(AutoFreePointer):
-    def __init__(self, context, owner, pointer, size, finalizer=None):
+    def __init__(self, context, pointer, size, owner, finalizer=None):
 ```
 
 - `context`: The context in which the pointer was allocated.
@@ -311,7 +311,7 @@ with the `PinnedMemory` class:
 
 ```python
 class PinnedMemory(mviewbuf.MemAlloc):
-    def __init__(self, context, owner, pointer, size, finalizer=None):
+    def __init__(self, context, pointer, size, owner, finalizer=None):
 ```
 
 - `context`: The context in which the pointer was allocated.
