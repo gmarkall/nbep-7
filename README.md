@@ -2,11 +2,11 @@
 
 **Author:** Graham Markall, NVIDIA (<gmarkall@nvidia.com>)
 
-**Date:** 13-Jan-2020
+**Date:** 14-Jan-2020
 
-**Version:** 0.3
+**Version:** 0.4
 
-**Contributors**: Thomson Comer, Peter Entschev, Keith Kraus
+**Contributors**: Thomson Comer, Peter Entschev, John Kirkham, Keith Kraus
 
 
 ## Document status
@@ -384,22 +384,22 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
     def mempin(self, owner, pointer, size, mapped):
         # Implemented.
 
-    def prepare_for_use(self):
+    def initialize(self):
         # Implemented.
         #
-        # Must be called by any subclass when its prepare_for_use() method is
+        # Must be called by any subclass when its initialize() method is
         # called.
 
     def reset(self):
         # Implemented.
         #
-        # Must be called by any subclass when its prepare_for_use() method is
+        # Must be called by any subclass when its reset() method is
         # called.
 
     def defer_cleanup(self):
         # Implemented.
         #
-        # Must be called by any subclass when its prepare_for_use() method is
+        # Must be called by any subclass when its defer_cleanup() method is
         # called.
 ```
 
@@ -408,7 +408,7 @@ add implementations of methods for on-device memory. Any subclass must observe
 the following rules:
 
 - The subclass must implement `memalloc` and `get_memory_info`.
-- The `prepare_for_use` and `reset` methods perform initialisation of structures
+- The `initialize` and `reset` methods perform initialisation of structures
   used by the `HostOnlyCUDAMemoryManager`.
   - If the subclass has nothing to do on initialisation (possibly) or reset
     (unlikely) then it need not implement these methods. 
@@ -480,10 +480,10 @@ class RMMNumbaManager(HostOnlyCUDAMemoryManager):
         # Returns a tuple of (free, total) using RMM functionality.
         return get_memory_info()
 
-    def prepare_for_use(self):
+    def initialize(self):
         # Initialise RMM here, as it is just prior to the first use of CUDA
 	# in Numba.
-        super().prepare_for_use()
+        super().initialize()
         if not self._initialized:
             reinitialize(logging=self._logging)
 
@@ -658,7 +658,7 @@ e.g.:
 
     def prepare_for_use(self):
         self._memory_manager = memory_manager()
-        self._memory_manager.prepare_for_use()
+        self._memory_manager.initialize()
 
     def get_memory_info(self):
         self._memory_manager.get_memory_info()
