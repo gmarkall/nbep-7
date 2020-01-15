@@ -2,9 +2,9 @@
 
 **Author:** Graham Markall, NVIDIA (<gmarkall@nvidia.com>)
 
-**Date:** 14-Jan-2020
+**Date:** 15-Jan-2020
 
-**Version:** 0.4
+**Version:** 0.5
 
 **Contributors**: Thomson Comer, Peter Entschev, John Kirkham, Keith Kraus
 
@@ -249,8 +249,9 @@ class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
         cleanup whilst it is active.
         """
 
+    @property
     @abstractmethod
-    def version(self):
+    def interface_version(self):
         """
 	Returns an integer specifying the version of the EMM Plugin interface
 	supported by the plugin implementation. Should always return 1 for
@@ -286,9 +287,9 @@ reset spontaneously, but it may be called at the behest of the user.
 `defer_cleanup` is called when the `numba.cuda.defer_cleanup` context manager
 is used from user code.
 
-`version` is called by Numba when the memory manager is set, to ensure that the
-version of the interface implemented by the plugin is compatible with the
-version of Numba in use.
+`interface_version` is called by Numba when the memory manager is set, to
+ensure that the version of the interface implemented by the plugin is
+compatible with the version of Numba in use.
 
 
 ### Representing pointers
@@ -501,7 +502,8 @@ class RMMNumbaManager(HostOnlyCUDAMemoryManager):
         with super().defer_cleanup():
             yield
 
-    def version(self):
+    @property
+    def interface_version(self):
         # As required by the specification
         return 1
 
