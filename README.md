@@ -883,7 +883,7 @@ Numba memory management. There are an additional 6 skipped tests, from:
   when an EMM Plugin is used, but ownership is assumed by this test case.
 
 
-# CuPy
+#### CuPy
 
 The test suite can be run with the CuPy plugin using:
 
