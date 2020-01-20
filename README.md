@@ -2,9 +2,9 @@
 
 **Author:** Graham Markall, NVIDIA (<gmarkall@nvidia.com>)
 
-**Date:** 15-Jan-2020
+**Date:** 20-Jan-2020
 
-**Version:** 0.5
+**Version:** 0.6
 
 **Contributors**: Thomson Comer, Peter Entschev, John Kirkham, Keith Kraus
 
@@ -762,9 +762,10 @@ designs presented in this document. The implementations presently do not fully
 align with the design outlined here, but were used for proving concepts for
 various aspects of the design. In particular, the implementation:
 
-- Provides enough change to support an EMM plugin using RMM
-  - and potentially other EMM plugins such as for CuPy, but these are as-yet
-    unimplemented.
+- Provides enough change to support EMM plugins using:
+  - The RAPIDS Memory Manager (RMM),
+  - A CuPy memory pool,
+  - and potentially other EMM plugins, which are as-yet unplanned / unimplemented.
 - does not provide such clean interface boundaries as outlined in this document.
 
 It is expected that as the design and document evolve towards completion, the
@@ -775,11 +776,15 @@ The current implementations can be found in:
 
 - Numba branch: https://github.com/gmarkall/numba/tree/grm-numba-nbep-7.
 - RMM branch: https://github.com/gmarkall/rmm/tree/grm-numba-nbep-7.
-- CuPy branch: Potentially to be created in the future.
-  - See [CuPy memory management docs](https://docs-cupy.chainer.org/en/stable/reference/memory.html).
+- CuPy implementation: [nbep7/cupy\_mempool.py](nbep7/cupy_mempool.py) - uses an
+  unmodified CuPy.
+  - See [CuPy memory management
+    docs](https://docs-cupy.chainer.org/en/stable/reference/memory.html).
 
 
 ### Current implementation status
+
+#### RMM Plugin
 
 For a minimal example, a simple allocation and free using RMM works as expected.
 For the example code (similar to the RMM example above):
@@ -810,12 +815,39 @@ This output is similar to the expected output from the example usage presented
 above (though note that the pointer addresses and timestamps vary compared to
 the example), and provides some validation of the example use case.
 
+#### CuPy Plugin
+
+```python
+from nbep7.cupy_mempool import use_cupy_mm_for_numba
+import numpy as np
+
+from numba import cuda
+
+use_cupy_mm_for_numba()
+
+a = np.zeros(10)
+d_a = cuda.to_device(a)
+del(d_a)
+```
+
+The prototype CuPy plugin has somewhat primitive logging, so we see the output:
+
+```
+Allocated 80 bytes at 7f004d400000
+Freeing 80 bytes at 7f004d400000
+```
+
 
 ### Numba CUDA Unit tests
 
 As well as providing correct execution of a simple example, all relevant Numba
-CUDA unit tests also pass with the prototype branch. The unit test suite can be
-run with the RMM EMM Plugin with:
+CUDA unit tests also pass with the prototype branch. for the internal memory
+manager and the RMM EMM Plugin.
+
+
+#### RMM
+
+The unit test suite can be run with the RMM EMM Plugin with:
 
 ```
 NUMBA_CUDA_MEMORY_MANAGER=RMM python -m numba.runtests numba.cuda.tests
@@ -849,6 +881,89 @@ Numba memory management. There are an additional 6 skipped tests, from:
   deferred cleanup.
 - `TestCudaArrayInterface.test_ownership`: skipped as Numba does not own memory
   when an EMM Plugin is used, but ownership is assumed by this test case.
+
+
+# CuPy
+
+The test suite can be run with the CuPy plugin using:
+
+```
+NUMBA_CUDA_MEMORY_MANAGER=RMM python -m numba.runtests numba.cuda.tests
+```
+
+This plugin implementation is presently more primitive than the RMM
+implementation, and results in some errors with the unit test suite:
+
+```
+Ran 548 tests in 118.264s
+
+FAILED (errors=60, skipped=11)
+```
+
+These are yet to be triaged / investigated, but the list of failing tests is:
+
+```
+ERROR: test_ipc_array (numba.cuda.tests.cudapy.test_ipc.TestIpcMemory)
+ERROR: test_ipc_array (numba.cuda.tests.cudapy.test_ipc.TestIpcStaged)
+ERROR: test_ipc_handle (numba.cuda.tests.cudapy.test_ipc.TestIpcMemory)
+ERROR: test_ipc_handle_serialization (numba.cuda.tests.cudapy.test_ipc.TestIpcMemory)
+ERROR: test_staged (numba.cuda.tests.cudapy.test_ipc.TestIpcStaged)
+ERROR: test_const_align (numba.cuda.tests.cudapy.test_constmem.TestCudaConstantMemory)
+ERROR: test_const_array (numba.cuda.tests.cudapy.test_constmem.TestCudaConstantMemory)
+ERROR: test_const_array_2d (numba.cuda.tests.cudapy.test_constmem.TestCudaConstantMemory)
+ERROR: test_const_empty (numba.cuda.tests.cudapy.test_constmem.TestCudaConstantMemory)
+ERROR: test_const_record (numba.cuda.tests.cudapy.test_constmem.TestCudaConstantMemory)
+ERROR: test_const_record_align (numba.cuda.tests.cudapy.test_constmem.TestCudaConstantMemory)
+ERROR: test_const_record_empty (numba.cuda.tests.cudapy.test_constmem.TestCudaConstantMemory)
+ERROR: test_autojit (numba.cuda.tests.cudapy.test_autojit.TestCudaAutoJit)
+ERROR: test_linking (numba.cuda.tests.cudadrv.test_linker.TestLinker)
+ERROR: test_boolean (numba.cuda.tests.cudapy.test_boolean.TestCudaBoolean)
+ERROR: test_float_to_complex (numba.cuda.tests.cudapy.test_casting.TestCasting)
+ERROR: test_float_to_int (numba.cuda.tests.cudapy.test_casting.TestCasting)
+ERROR: test_float_to_unsigned (numba.cuda.tests.cudapy.test_casting.TestCasting)
+ERROR: test_int_to_float (numba.cuda.tests.cudapy.test_casting.TestCasting)
+ERROR: test_freevar (numba.cuda.tests.cudapy.test_freevar.TestFreeVar)
+ERROR: test_inplace_div (numba.cuda.tests.cudapy.test_idiv.TestCudaIDiv)
+ERROR: test_inplace_div_double (numba.cuda.tests.cudapy.test_idiv.TestCudaIDiv)
+ERROR: test_concurrent_compiling (numba.cuda.tests.cudapy.test_multithreads.TestMultiThreadCompiling)
+ERROR: test_enumerate (numba.cuda.tests.cudapy.test_lang.TestLang)
+ERROR: test_global_build_tuple (numba.cuda.tests.cudapy.test_macro.TestMacro)
+ERROR: test_global_constant_tuple (numba.cuda.tests.cudapy.test_macro.TestMacro)
+ERROR: test_global_constants (numba.cuda.tests.cudapy.test_macro.TestMacro)
+ERROR: test_local_array_1_tuple (numba.cuda.tests.cudapy.test_localmem.TestCudaLocalMem)
+ERROR: test_array_default (numba.cuda.tests.cudapy.test_retrieve_autoconverted_arrays.TestRetrieveAutoconvertedArrays)
+ERROR: test_array_in_from_config (numba.cuda.tests.cudapy.test_retrieve_autoconverted_arrays.TestRetrieveAutoconvertedArrays)
+ERROR: test_pickling_autojit (numba.cuda.tests.cudapy.test_serialize.TestPickle)
+ERROR: test_pickling_jit (numba.cuda.tests.cudapy.test_serialize.TestPickle)
+ERROR: test_pickling_vectorize (numba.cuda.tests.cudapy.test_serialize.TestPickle)
+ERROR: test_rec_read_a (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_rec_read_b (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_rec_read_c (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_rec_set_a (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_rec_set_b (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_rec_set_c (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_record_in (numba.cuda.tests.cudapy.test_retrieve_autoconverted_arrays.TestRetrieveAutoconvertedArrays)
+ERROR: test_record_inout (numba.cuda.tests.cudapy.test_retrieve_autoconverted_arrays.TestRetrieveAutoconvertedArrays)
+ERROR: test_record_read_1d_array (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_record_read_2d_array (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_record_write_1d_array (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_record_write_2d_array (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_set_a (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtype)
+ERROR: test_set_a (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_set_b (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtype)
+ERROR: test_set_b (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_set_c (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtype)
+ERROR: test_set_c (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_set_record (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtype)
+ERROR: test_set_record (numba.cuda.tests.cudapy.test_record_dtype.TestRecordDtypeWithStructArrays)
+ERROR: test_attached_non_primary (numba.cuda.tests.cudadrv.test_context_stack.Test3rdPartyContext)
+ERROR: test_context_memory (numba.cuda.tests.cudadrv.test_context_stack.TestContextAPI)
+ERROR: test_forbidden_context_switch (numba.cuda.tests.cudadrv.test_context_stack.TestContextAPI)
+ERROR: test_gpus_current (numba.cuda.tests.cudadrv.test_context_stack.TestContextStack)
+ERROR: test_gpus_iter (numba.cuda.tests.cudadrv.test_context_stack.TestContextStack)
+ERROR: test_gpus_len (numba.cuda.tests.cudadrv.test_context_stack.TestContextStack)
+ERROR: test_multigpu_context (numba.cuda.tests.cudapy.test_multigpu.TestMultiGPUContext)
+```
 
 
 ## Unresolved items
