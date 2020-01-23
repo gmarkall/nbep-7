@@ -7,7 +7,7 @@
 # One allocation results from the creation of d_a in cuda.to_device.
 # On free results from the deletion of d_a.
 
-from cupy_mempool import use_cupy_mm_for_numba
+from nbep7.cupy_mempool import use_cupy_mm_for_numba
 import numpy as np
 
 from numba import cuda
