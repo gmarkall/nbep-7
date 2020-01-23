@@ -1,3 +1,4 @@
+from collections import namedtuple
 from contextlib import contextmanager
 
 from numba import cuda
@@ -6,12 +7,15 @@ from numba.cuda.cudadrv.memory import HostOnlyCUDAMemoryManager, MemoryPointer
 import ctypes
 import cupy
 
+_MemoryInfo = namedtuple("_MemoryInfo", "free,total")
+
 
 class CuPyNumbaManager(HostOnlyCUDAMemoryManager):
     def __init__(self, logging=True):
         super().__init__()
         self._logging = logging
         self._allocations = {}
+        self._mp = None
 
     def memalloc(self, nbytes, stream=0):
         if stream != 0:
@@ -43,7 +47,8 @@ class CuPyNumbaManager(HostOnlyCUDAMemoryManager):
         raise NotImplementedError
 
     def get_memory_info(self):
-        raise NotImplementedError
+        return _MemoryInfo(free=self._mp.free_bytes(),
+                           total=self._mp.total_bytes())
 
     def initialize(self):
         super().initialize()
@@ -51,7 +56,8 @@ class CuPyNumbaManager(HostOnlyCUDAMemoryManager):
 
     def reset(self):
         # Note: can't seem to force everything to be freed?
-        self._mp.free_all_blocks()
+        if self._mp:
+            self._mp.free_all_blocks()
 
     @contextmanager
     def defer_cleanup(self):
