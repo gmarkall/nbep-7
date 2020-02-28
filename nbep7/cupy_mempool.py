@@ -71,3 +71,6 @@ class CuPyNumbaManager(HostOnlyCUDAMemoryManager):
 
 def use_cupy_mm_for_numba():
     cuda.cudadrv.driver.set_memory_manager(CuPyNumbaManager)
+
+
+_numba_memory_manager = CuPyNumbaManager

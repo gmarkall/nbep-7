@@ -4,7 +4,7 @@
 
 **Date:** 28-Feb-2020
 
-**Version:** 0.7
+**Version:** 0.8
 
 **Contributors**: Thomson Comer, Peter Entschev, John Kirkham, Keith Kraus, Leo
 Fang
@@ -153,15 +153,16 @@ this module for developers of EMM Plugins are:
 
 As an alternative to calling the `set_memory_manager` function, an environment
 variable can be used to set the memory manager. The value of the environment
-variable should be the name of the memory manager plugin class, i.e.:
+variable should be the name of the module containing the memory manager in its
+global scope, named `_numba_memory_manager`:
 
 ```
-export NUMBA_CUDA_MEMORY_MANAGER="<class>"
+export NUMBA_CUDA_MEMORY_MANAGER="<module>"
 ```
 
-When this variable is set, Numba will automatically use the specified memory
-manager class. Calls to `set_memory_manager` will issue a warning, but otherwise
-be ignored.
+When this variable is set, Numba will automatically use the memory manager from
+the specified module. Calls to `set_memory_manager` will issue a warning, but
+otherwise be ignored.
 
 
 ### Plugin Base Classes
@@ -582,6 +583,9 @@ def _make_finalizer(handle, stream):
 # Utility function register `RMMNumbaManager` as an EMM:
 def use_rmm_for_numba():
     cuda.cudadrv.driver.set_memory_manager(RMMNumbaManager)
+
+# To support `NUMBA_CUDA_MEMORY_MANAGER=rmm`:
+_numba_memory_manager = RMMNumbaManager
 ```
 
 
