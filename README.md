@@ -2,20 +2,20 @@
 
 **Author:** Graham Markall, NVIDIA (<gmarkall@nvidia.com>)
 
-**Date:** 20-Jan-2020
+**Date:** 28-Feb-2020
 
-**Version:** 0.6
+**Version:** 0.7
 
-**Contributors**: Thomson Comer, Peter Entschev, John Kirkham, Keith Kraus
+**Contributors**: Thomson Comer, Peter Entschev, John Kirkham, Keith Kraus, Leo
+Fang
 
 
 ## Document status
 
-This is an initial draft, provided for review and feedback by those in the
-community with an interest. It is possible that significant revisions will be
-made in order to evolve the proposal towards a complete and finished state.
-
-For more information about the status and process see the [Next steps and
+This is a complete draft - the specification matches closely the intended
+implementation, and the prototype implementation is currently being refined
+towards being ready to make a PR for inclusion in Numba. For more information
+about the status and process see the [Next steps and
 status](#next-steps-and-status) section.
 
 
@@ -50,7 +50,7 @@ Provide an *External Memory Manager (EMM)* interface in Numba.
 - When the EMM is in use, Numba will make all memory allocation using the EMM.
   It will never directly call functions such as `CuMemAlloc`, `cuMemFree`, etc.
 - When not using an *External Memory Manager (EMM)*, Numba's present behaviour
-  is unchanged (at the time of writing, the current version is the 0.47
+  is unchanged (at the time of writing, the current version is the 0.48
   release).
 
 If an EMM is to be used, it will entirely replace Numba's internal memory
@@ -270,6 +270,7 @@ should not invalidate or reset the state of the EMM.
 
 The `memalloc`, `memhostalloc`, and `mempin` methods are called when Numba
 requires an allocation of device or host memory, or pinning of host memory.
+Device memory should always be allocated in the current context.
 
 `get_ipc_handle` is called when an IPC handle for an array is required. Note
 that there is no method for closing an IPC handle - this is because the
@@ -282,7 +283,9 @@ the EMM Plugin interface.
 `get_memory_info` may be called at any time after `initialize`.
 
 `reset` is called as part of resetting a context. Numba does not normally call
-reset spontaneously, but it may be called at the behest of the user.
+reset spontaneously, but it may be called at the behest of the user. Calls to
+`reset` may even occur before `initialize` is called, so the plugin should be
+robust against this occurrence.
 
 `defer_cleanup` is called when the `numba.cuda.defer_cleanup` context manager
 is used from user code.
@@ -408,6 +411,9 @@ A class can subclass the `HostOnlyCUDAMemoryManager` and then it only needs to
 add implementations of methods for on-device memory. Any subclass must observe
 the following rules:
 
+- If the subclass implements `__init__`, then it must also call
+  `HostOnlyCUDAMemoryManager.__init__`, as this is used to initialize some of
+  its data structures (`self.allocations` and `self.deallocations`).
 - The subclass must implement `memalloc` and `get_memory_info`.
 - The `initialize` and `reset` methods perform initialisation of structures
   used by the `HostOnlyCUDAMemoryManager`.
@@ -419,6 +425,56 @@ the following rules:
   provided by `HostOnlyCUDAManager.defer_cleanup()` prior to `yield`ing (or in
   the `__enter__` method) and release it prior to exiting (or in the `__exit__`
   method).
+
+
+### Import order
+
+The order in which Numba and the library implementing an EMM Plugin should not
+matter. For example, if `rmm` were to implement and register an EMM Plugin,
+then:
+
+```python
+from numba import cuda
+import rmm
+```
+
+and
+
+```python
+import rmm
+from numba import cuda
+```
+
+are equivalent - this is because Numba does not initialize CUDA or allocate any
+memory until the first call to a CUDA function - neither instantiating and
+registering an EMM plugin, nor importing `numba.cuda` causes a call to a CUDA
+function.
+
+
+### Numba as a Dependency
+
+Adding the implementation of an EMM Plugin to a library naturally makes Numba a
+dependency of the library where it may not have been previously. In order to
+make the dependency optional, if this is desired, one might conditionally
+instantiate and register the EMM Plugin like:
+
+```python
+try:
+    import numba
+    from mylib.numba_utils import MyNumbaMemoryManager
+    numba.cuda.cudadrv.driver.set_memory_manager(MyNumbaMemoryManager)
+except:
+    print("Numba not importable - not registering EMM Plugin")
+```
+
+so that `mylib.numba_utils`, which contains the implementation of the EMM
+Plugin, is only imported if Numba is already present. If Numba is not available,
+then `mylib.numba_utils` (which necessarily imports `numba`), will never be
+imported.
+
+It is recommended that any library with an EMM Plugin includes at least some
+environments with Numba for testing with the EMM Plugin in use, as well as some
+environments without Numba, to avoid introducing an accidental Numba dependency.
 
 
 ## Example implementation - A RAPIDS Memory Manager (RMM) Plugin
@@ -966,23 +1022,6 @@ ERROR: test_multigpu_context (numba.cuda.tests.cudapy.test_multigpu.TestMultiGPU
 ```
 
 
-## Unresolved items
-
-So far this proposal is not based on a well-defined notion of how the plugin
-interface interacts with the context. Some questions that would require answers
-in order to specify the relationship between contexts and memory management
-include:
-
-- Does the memory manager plugin need to give a context as a parameter to its
-  methods? Or, is just using the current context appropriate?
-- Should each context have its own instance of the memory manager?
-  - For inspiration: does RMM manage memory for one context or all contexts?
-  - CuPy keeps a [`MemoryPool`
-    object](https://github.com/cupy/cupy/blob/master/cupy/cuda/memory.pyx#L1213-L1239)
-    with [one memory pool per
-    GPU](https://github.com/cupy/cupy/blob/master/cupy/cuda/memory.pyx#L1244-L1245).
-
-
 ## Next steps and status
 
 It is expected that an implementation that can be proposed for merging into
@@ -1002,5 +1041,7 @@ Numba will emerge from the following steps:
 4. Ensure the code of this implementation is high quality with appropriate
    testing, documentation, and examples.
 
-Currently, this proposal is at step 1 - it is being circulated for feedback and
-will be iteratively revised accordingly.
+Currently, this proposal is between steps 3 and 4 - the implementation is being
+refined towards being ready for a pull request and review for inclusion in
+Numba.
+
