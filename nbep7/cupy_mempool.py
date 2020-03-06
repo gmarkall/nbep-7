@@ -1,19 +1,16 @@
-from collections import namedtuple
 from contextlib import contextmanager
 
 from numba import cuda
-from numba.cuda.cudadrv.memory import HostOnlyCUDAMemoryManager, MemoryPointer
+from numba.cuda import HostOnlyCUDAMemoryManager, MemoryPointer, MemoryInfo
 
 import ctypes
 import cupy
 
-_MemoryInfo = namedtuple("_MemoryInfo", "free,total")
-
 
 class CuPyNumbaManager(HostOnlyCUDAMemoryManager):
-    def __init__(self, logging=True):
-        super().__init__()
-        self._logging = logging
+    def __init__(self, *args, **kwargs):
+        self._logging = kwargs.pop('logging', False)
+        super().__init__(*args, **kwargs)
         self._allocations = {}
         self._mp = None
 
@@ -47,8 +44,8 @@ class CuPyNumbaManager(HostOnlyCUDAMemoryManager):
         raise NotImplementedError
 
     def get_memory_info(self):
-        return _MemoryInfo(free=self._mp.free_bytes(),
-                           total=self._mp.total_bytes())
+        return MemoryInfo(free=self._mp.free_bytes(),
+                          total=self._mp.total_bytes())
 
     def initialize(self):
         super().initialize()
