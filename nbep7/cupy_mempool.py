@@ -1,22 +1,23 @@
 from contextlib import contextmanager
 
 from numba import cuda
-from numba.cuda import HostOnlyCUDAMemoryManager, MemoryPointer, MemoryInfo
+from numba.cuda import (GetIpcHandleMixin, HostOnlyCUDAMemoryManager,
+                        MemoryPointer, MemoryInfo)
 
 import ctypes
 import cupy
 
+LOGGING = False
 
-class CuPyNumbaManager(HostOnlyCUDAMemoryManager):
+
+class CuPyNumbaManager(GetIpcHandleMixin, HostOnlyCUDAMemoryManager):
     def __init__(self, *args, **kwargs):
-        self._logging = kwargs.pop('logging', False)
         super().__init__(*args, **kwargs)
+        self._logging = LOGGING
         self._allocations = {}
         self._mp = None
 
-    def memalloc(self, nbytes, stream=0):
-        if stream != 0:
-            print("Warning: non-default stream has no effect")
+    def memalloc(self, nbytes):
         cp_mp = self._mp.malloc(nbytes)
         if self._logging:
             print("Allocated %d bytes at %x" % (nbytes, cp_mp.ptr))
@@ -39,9 +40,6 @@ class CuPyNumbaManager(HostOnlyCUDAMemoryManager):
             allocations.pop(ptr)
 
         return finalizer
-
-    def get_ipc_handle(self, memory, stream=0):
-        raise NotImplementedError
 
     def get_memory_info(self):
         return MemoryInfo(free=self._mp.free_bytes(),
